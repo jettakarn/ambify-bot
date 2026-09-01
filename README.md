@@ -69,6 +69,24 @@ PDF → probe (text layer?)
 pytest
 ```
 
+## Publish to GitHub
+
+This repo is initialized locally. To push to GitHub:
+
+1. Create an empty repository named `rostersync` on GitHub.
+2. Run:
+
+```bash
+git remote add origin https://github.com/<your-username>/rostersync.git
+git push -u origin main
+```
+
+Install [GitHub CLI](https://cli.github.com/) for one-command setup:
+
+```bash
+gh repo create rostersync --public --source=. --remote=origin --push
+```
+
 ## Privacy
 
 Real roster PDFs contain all staff names and IDs. Do **not** commit PDFs to the repository. Tests use anonymized JSON fixtures only.
