@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from rostersync.models import RosterDocument, RosterRow, ValidationIssue
+from twoshiftly.models import RosterDocument, RosterRow, ValidationIssue
 
 
 def _parse_hhmm(value: str) -> dt.timedelta:

@@ -1,67 +1,71 @@
-# rostersync
+# twoshiftly (2shiftly)
 
-Convert PDF shift rosters to calendar (`.ics`) files.
+Convert **scanned** PDF shift rosters to calendar (`.ics`) files — **fully offline**, no API keys.
 
-Built for **Ambassador Theatres (國賓影城) branch daily rosters** — one page per day listing all staff with start/end times. Supports both digital PDFs (text layer) and scanned PDFs (vision model).
+Built for **Ambassador Theatres (國賓影城) branch daily rosters** using local OCR (RapidOCR) and fixed layout rules.
+
+## Quick start (Windows)
+
+```powershell
+cd twoshiftly
+.\run.ps1 convert your-roster.pdf
+```
+
+`run.ps1` / `run.bat` will:
+1. Auto-install the package if needed
+2. Run via `py -m twoshiftly.cli` — **no PATH setup**
+3. OCR each page locally (first run downloads ~10MB ONNX models)
+4. Prompt you to pick an employee → write `.ics`
 
 ## Features
 
-- **Hybrid extraction**: text-layer PDFs via `pdfplumber`, scanned PDFs via pluggable vision API (Gemini first)
-- **Hours checksum validation**: compares computed duration against the roster's 時數 column
-- **Cross-day shift detection**: infers overnight shifts when end < start
-- **Employee filtering**: pick one person and optionally infer days off
-- **ICS export**: RFC 5545 with Asia/Taipei timezone, UTF-8 line folding
+- **100% offline** — no Gemini, no API key, no network after model download
+- **Interactive employee picker** — omit `--employee` and choose from a list
+- **Hours checksum validation** — `--strict` compares 時數 column
+- **Cross-day shift detection** — overnight shifts inferred automatically
+- **ICS export** — Asia/Taipei timezone, RFC 5545
 
-## Install
+## Install (manual)
 
 ```bash
-git clone https://github.com/jxtssn/rostersync.git
-cd rostersync
 pip install -e ".[dev]"
 ```
 
-Copy `.env.example` to `.env` and set `GEMINI_API_KEY` for scanned PDFs.
-
 ## Usage
 
-```bash
-# Convert one employee's shifts to calendar
-rostersync convert roster.pdf --employee Jetson -o jetson.ics
+```powershell
+# Interactive
+.\run.ps1 convert roster.pdf
 
-# Also write JSON
-rostersync convert roster.pdf --employee Jetson --also-json
+# Specify employee
+.\run.ps1 convert roster.pdf --employee Jetson -o jetson.ics --strict
 
-# Extract full roster (all employees) to JSON
-rostersync extract roster.pdf --json roster.json
+# Extract all employees to JSON
+.\run.ps1 extract roster.pdf --json roster.json
 
-# Inspect PDF without writing output
-rostersync inspect roster.pdf
+# Inspect
+.\run.ps1 inspect roster.pdf
 ```
 
-### Options
+Equivalent:
 
-| Flag | Description |
-|------|-------------|
-| `--employee` / `-e` | Employee nickname |
-| `--employee-id` | Employee ID (員工代號) |
-| `--output` / `-o` | Output `.ics` path |
-| `--provider` | Vision provider (`gemini`) |
-| `--model` | Vision model override |
-| `--strict` | Fail on validation errors |
-| `--no-infer-days-off` | Skip inferring OFF for missing days |
-| `--cache-dir` | Cache vision responses by page hash |
-| `--also-json` | Also write JSON alongside ICS |
+```bash
+py -m twoshiftly.cli convert roster.pdf --employee Jetson
+twoshiftly convert roster.pdf --employee Jetson   # if on PATH
+```
 
 ## Architecture
 
 ```
-PDF → probe (text layer?)
-  ├─ yes → pdfplumber table extraction
-  └─ no  → pypdfium2 render → vision model → cached JSON
-       → validate (hours checksum)
-       → filter (employee + inferred days off)
-       → .ics / .json
+PDF (scan) → pypdfium2 render (2480px)
+          → RapidOCR
+          → Ambassador layout parser
+          → validate (hours checksum)
+          → filter employee (+ infer days off)
+          → .ics / .json
 ```
+
+Cache: `.twoshiftly/cache/` and `.twoshiftly/render/` next to the PDF.
 
 ## Development
 
@@ -69,27 +73,13 @@ PDF → probe (text layer?)
 pytest
 ```
 
-## Publish to GitHub
+## Supported format
 
-This repo is initialized locally. To push to GitHub:
-
-1. Create an empty repository named `rostersync` on GitHub.
-2. Run:
-
-```bash
-git remote add origin https://github.com/<your-username>/rostersync.git
-git push -u origin main
-```
-
-Install [GitHub CLI](https://cli.github.com/) for one-command setup:
-
-```bash
-gh repo create rostersync --public --source=. --remote=origin --push
-```
+Currently calibrated for **國賓影城八德分公司** daily scanned rosters (one page per day, all staff listed).
 
 ## Privacy
 
-Real roster PDFs contain all staff names and IDs. Do **not** commit PDFs to the repository. Tests use anonymized JSON fixtures only.
+Do not commit real roster PDFs. Tests use anonymized JSON fixtures.
 
 ## License
 

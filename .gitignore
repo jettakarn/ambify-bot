@@ -11,24 +11,21 @@ build/
 venv/
 env/
 
-# Environment & secrets
+# Environment
 .env
 .env.local
 
 # IDE
 .vscode/
 .idea/
-*.swp
-*.swo
 
 # Project outputs & sensitive data
 out/
 *.pdf
 *.png
 *.ics
-!tests/**/*.ics
 .cache/
-.rostersync/
+.twoshiftly/
 
 # Test & coverage
 .pytest_cache/
@@ -38,7 +35,6 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
-desktop.ini
 
-# Temp
+# Legacy
 .tmp/

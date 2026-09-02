@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
 import pypdfium2 as pdfium
+
+DEFAULT_RENDER_WIDTH = int(os.environ.get("TWOSHIFTLY_RENDER_WIDTH", "2480"))
 
 
 @dataclass(frozen=True)
@@ -16,6 +19,8 @@ class RenderedPage:
     page_index: int
     image_path: Path
     content_hash: str
+    width: int
+    height: int
 
 
 def _page_hash(image_bytes: bytes) -> str:
@@ -26,7 +31,7 @@ def render_pdf_pages(
     pdf_path: Path,
     output_dir: Path,
     *,
-    target_width: int = 1700,
+    target_width: int = DEFAULT_RENDER_WIDTH,
 ) -> list[RenderedPage]:
     """Render each PDF page to PNG and return metadata."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -47,6 +52,8 @@ def render_pdf_pages(
                 page_index=index,
                 image_path=image_path,
                 content_hash=content_hash,
+                width=pil_image.width,
+                height=pil_image.height,
             )
         )
 
