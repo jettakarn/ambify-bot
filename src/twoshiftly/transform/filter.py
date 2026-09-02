@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import datetime as dt
 
-from rostersync.models import EmployeeSchedule, RosterDocument, RosterRow, Shift
-from rostersync.validate import infer_cross_day
+from twoshiftly.models import EmployeeSchedule, RosterDocument, RosterRow, Shift
+from twoshiftly.validate import infer_cross_day
 
 
 def _normalize_section(section: str) -> str:
@@ -24,7 +24,10 @@ def _match_row(
 ) -> bool:
     if employee_id and row.employee_id == employee_id.strip():
         return True
-    if employee and row.nickname.lower() == employee.strip().lower():
+    if employee and (
+        row.nickname.lower() == employee.strip().lower()
+        or employee.strip().lower() in row.nickname.lower()
+    ):
         return True
     return False
 
@@ -44,7 +47,6 @@ def find_employee(
             if _match_row(row, employee=employee, employee_id=employee_id):
                 return row.nickname, row.employee_id
 
-    # Collect available employees for helpful error
     names = sorted({row.nickname for day in document.days for row in day.rows})
     raise ValueError(
         f"Employee not found: {employee or employee_id}. "
@@ -123,7 +125,6 @@ def filter_employee_schedule(
         ]
 
         if matched:
-            # One employee should appear at most once per day in this format.
             shifts.append(_row_to_shift(day.date, matched[0], day.weekday))
         elif infer_days_off:
             note = f"{day.weekday}；{off_note}" if day.weekday else off_note

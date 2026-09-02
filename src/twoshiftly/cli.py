@@ -1,4 +1,4 @@
-"""Command-line interface for rostersync."""
+"""Command-line interface for twoshiftly (2shiftly)."""
 
 from __future__ import annotations
 
@@ -7,29 +7,24 @@ from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
-from dotenv import load_dotenv
 
-from rostersync.models import EmployeeSchedule, RosterDocument
-from rostersync.pdf.probe import probe_pdf
-from rostersync.service import load_roster_document
-from rostersync.transform.filter import filter_employee_schedule, list_employees
-from rostersync.transform.ics import build_ics
+from twoshiftly.cli_helpers import default_page_progress, load_document_with_feedback
+from twoshiftly.cli_interactive import prompt_employee
+from twoshiftly.models import EmployeeSchedule, RosterDocument
+from twoshiftly.pdf.render import DEFAULT_RENDER_WIDTH
+from twoshiftly.transform.filter import filter_employee_schedule, list_employees
+from twoshiftly.transform.ics import build_ics
 
 app = typer.Typer(
-    name="rostersync",
-    help="Convert PDF shift rosters to calendar (.ics) files.",
+    name="twoshiftly",
+    help="2shiftly — offline OCR: scanned PDF rosters → calendar (.ics)",
     no_args_is_help=True,
 )
 
 
-def _load_env() -> None:
-    load_dotenv()
-
-
 def _default_output_path(pdf_path: Path, employee: str, suffix: str) -> Path:
-    stem = pdf_path.stem
     safe_name = employee.lower().replace(" ", "-")
-    return pdf_path.parent / f"{safe_name}-{stem}{suffix}"
+    return pdf_path.parent / f"{safe_name}-{pdf_path.stem}{suffix}"
 
 
 def _write_json(path: Path, schedule: EmployeeSchedule) -> None:
@@ -57,32 +52,29 @@ def convert(
     employee: Annotated[Optional[str], typer.Option("--employee", "-e", help="Employee nickname")] = None,
     employee_id: Annotated[Optional[str], typer.Option("--employee-id", help="Employee ID")] = None,
     output: Annotated[Optional[Path], typer.Option("--output", "-o", help="Output .ics path")] = None,
-    provider: Annotated[str, typer.Option("--provider", help="Vision provider for scanned PDFs")] = "gemini",
-    model: Annotated[Optional[str], typer.Option("--model", help="Vision model name")] = None,
-    api_key: Annotated[Optional[str], typer.Option("--api-key", help="Vision API key")] = None,
     strict: Annotated[bool, typer.Option("--strict", help="Fail on validation errors")] = False,
     infer_days_off: Annotated[bool, typer.Option("--infer-days-off/--no-infer-days-off")] = True,
-    cache_dir: Annotated[Optional[Path], typer.Option("--cache-dir", help="Vision cache directory")] = None,
+    cache_dir: Annotated[Optional[Path], typer.Option("--cache-dir", help="OCR cache directory")] = None,
     render_dir: Annotated[Optional[Path], typer.Option("--render-dir", help="Rendered page directory")] = None,
-    target_width: Annotated[int, typer.Option("--target-width", help="Rendered page width in px")] = 1700,
+    target_width: Annotated[int, typer.Option("--target-width", help="Rendered page width in px")] = DEFAULT_RENDER_WIDTH,
     also_json: Annotated[bool, typer.Option("--also-json", help="Also write JSON output")] = False,
 ) -> None:
-    """Convert a roster PDF to an employee .ics calendar file."""
-    _load_env()
+    """Convert a scanned roster PDF to an employee .ics calendar file."""
+    typer.echo("twoshiftly — offline OCR mode (no API key)")
 
-    document, issues = load_roster_document(
+    document, _issues = load_document_with_feedback(
         pdf,
-        provider=provider,
-        api_key=api_key,
-        model=model,
         cache_dir=cache_dir,
         render_dir=render_dir,
         target_width=target_width,
         strict=strict,
+        on_page=default_page_progress,
     )
 
-    for issue in issues:
-        typer.echo(f"[{issue.level}] {issue.message}", err=True)
+    if not employee and not employee_id:
+        picked_name, picked_id = prompt_employee(list_employees(document))
+        employee = picked_name
+        employee_id = picked_id
 
     schedule = filter_employee_schedule(
         document,
@@ -91,8 +83,7 @@ def convert(
         infer_days_off=infer_days_off,
     )
 
-    resolved_name = schedule.employee_name
-    ics_path = output or _default_output_path(pdf, resolved_name, ".ics")
+    ics_path = output or _default_output_path(pdf, schedule.employee_name, ".ics")
     _write_ics(ics_path, schedule)
     typer.echo(f"Wrote {ics_path}")
 
@@ -106,30 +97,20 @@ def convert(
 def extract(
     pdf: Annotated[Path, typer.Argument(help="Path to roster PDF", exists=True, dir_okay=False)],
     json_out: Annotated[Optional[Path], typer.Option("--json", "-j", help="Output JSON path")] = None,
-    provider: Annotated[str, typer.Option("--provider")] = "gemini",
-    model: Annotated[Optional[str], typer.Option("--model")] = None,
-    api_key: Annotated[Optional[str], typer.Option("--api-key")] = None,
     strict: Annotated[bool, typer.Option("--strict")] = False,
     cache_dir: Annotated[Optional[Path], typer.Option("--cache-dir")] = None,
     render_dir: Annotated[Optional[Path], typer.Option("--render-dir")] = None,
-    target_width: Annotated[int, typer.Option("--target-width")] = 1700,
+    target_width: Annotated[int, typer.Option("--target-width")] = DEFAULT_RENDER_WIDTH,
 ) -> None:
-    """Extract full roster document to JSON without filtering by employee."""
-    _load_env()
-
-    document, issues = load_roster_document(
+    """Extract full roster document to JSON."""
+    document, _issues = load_document_with_feedback(
         pdf,
-        provider=provider,
-        api_key=api_key,
-        model=model,
         cache_dir=cache_dir,
         render_dir=render_dir,
         target_width=target_width,
         strict=strict,
+        on_page=default_page_progress,
     )
-
-    for issue in issues:
-        typer.echo(f"[{issue.level}] {issue.message}", err=True)
 
     out_path = json_out or pdf.with_suffix(".roster.json")
     _write_document_json(out_path, document)
@@ -140,30 +121,25 @@ def extract(
 @app.command("inspect")
 def inspect(
     pdf: Annotated[Path, typer.Argument(help="Path to roster PDF", exists=True, dir_okay=False)],
-    provider: Annotated[str, typer.Option("--provider")] = "gemini",
-    model: Annotated[Optional[str], typer.Option("--model")] = None,
-    api_key: Annotated[Optional[str], typer.Option("--api-key")] = None,
     cache_dir: Annotated[Optional[Path], typer.Option("--cache-dir")] = None,
     render_dir: Annotated[Optional[Path], typer.Option("--render-dir")] = None,
-    target_width: Annotated[int, typer.Option("--target-width")] = 1700,
+    target_width: Annotated[int, typer.Option("--target-width")] = DEFAULT_RENDER_WIDTH,
 ) -> None:
-    """Show PDF metadata and employee list without writing output files."""
-    _load_env()
+    """Show PDF metadata and employee list."""
+    import pypdfium2 as pdfium
 
-    probe = probe_pdf(pdf)
+    doc = pdfium.PdfDocument(str(pdf))
     typer.echo(f"File: {pdf}")
-    typer.echo(f"Pages: {probe.page_count}")
-    typer.echo(f"Text layer: {'yes' if probe.has_text_layer else 'no (vision required)'}")
+    typer.echo(f"Pages: {len(doc)}")
+    typer.echo("Mode: local OCR (twoshiftly)")
 
-    document, issues = load_roster_document(
+    document, issues = load_document_with_feedback(
         pdf,
-        provider=provider,
-        api_key=api_key,
-        model=model,
         cache_dir=cache_dir,
         render_dir=render_dir,
         target_width=target_width,
         strict=False,
+        on_page=default_page_progress,
     )
 
     if document.date_range:

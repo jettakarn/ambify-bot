@@ -1,11 +1,11 @@
-"""Disk cache for vision model page extractions."""
+"""Disk cache for page extraction results."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-from rostersync.models import PageExtraction
+from twoshiftly.models import PageExtraction
 
 
 class ExtractionCache:

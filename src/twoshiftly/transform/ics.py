@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Iterable
 
-from rostersync.models import EmployeeSchedule, Shift
+from twoshiftly.models import EmployeeSchedule, Shift
 
 VENUE = "國賓影城八德分公司"
 
@@ -35,7 +35,7 @@ def fold(line: str) -> list[str]:
         if size + n > limit:
             out.append(buf)
             buf = ch
-            size = n + 1  # continuation lines carry a leading space
+            size = n + 1
             limit = 75
         else:
             buf += ch
@@ -46,7 +46,7 @@ def fold(line: str) -> list[str]:
 
 def _event_uid(shift: Shift, employee_name: str, employee_id: str | None) -> str:
     slug = (employee_id or employee_name).lower().replace(" ", "-")
-    return f"{shift.date.strftime('%Y%m%d')}-{slug}@rostersync"
+    return f"{shift.date.strftime('%Y%m%d')}-{slug}@2shiftly"
 
 
 def _calendar_name(schedule: EmployeeSchedule) -> str:
@@ -70,7 +70,7 @@ def build_ics(
     lines: list[str] = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        "PRODID:-//rostersync//shift-export//ZH-TW",
+        "PRODID:-//2shiftly//twoshiftly//ZH-TW",
         "CALSCALE:GREGORIAN",
         "METHOD:PUBLISH",
         "X-WR-CALNAME:" + esc(_calendar_name(schedule)),

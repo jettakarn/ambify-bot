@@ -89,7 +89,7 @@ class ValidationIssue(BaseModel):
 
 
 class PageExtraction(BaseModel):
-    """Vision model output for a single PDF page."""
+    """Parsed content from a single roster page."""
 
     date: dt.date | None = None
     weekday: str = ""

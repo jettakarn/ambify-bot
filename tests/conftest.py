@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from rostersync.models import RosterDocument
+from twoshiftly.models import RosterDocument
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
