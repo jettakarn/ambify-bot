@@ -20,12 +20,12 @@ def test_build_ics_cross_day():
         shifts=[
             Shift(
                 date=dt.date(2026, 8, 21),
-                shift_name="平日售票部 17:00-01:00",
+                shift_name="平日 17:00-01:00",
                 start_time="17:00",
                 end_time="01:00",
                 is_cross_day=True,
                 is_day_off=False,
-                location="售票部",
+                location=None,
                 notes="星期五；時數 08:00",
             ),
         ],
@@ -40,3 +40,6 @@ def test_build_ics_cross_day():
     assert len(events) == 1
     assert "@2shiftly" in str(events[0].get("UID"))
     assert events[0].decoded("DTEND").hour == 1
+    summary = str(events[0].get("SUMMARY"))
+    assert "售票" not in summary
+    assert "17:00-01:00" in summary

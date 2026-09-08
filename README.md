@@ -1,85 +1,50 @@
 # twoshiftly (2shiftly)
 
-Convert **scanned** PDF shift rosters to calendar (`.ics`) files — **fully offline**, no API keys.
+把**掃描班表 PDF**轉成行事曆（`.ics`）——**本機網頁介面**，離線 OCR，不用 API key。
 
-Built for **Ambassador Theatres (國賓影城) branch daily rosters** using local OCR (RapidOCR) and fixed layout rules.
+目前針對 **國賓影城（八德）** 每日掃描班表。
 
-## Quick start (Windows)
+## 快速開始（Windows）
 
-```powershell
-cd twoshiftly
-.\run.ps1 convert your-roster.pdf
-```
+1. 安裝 [Python 3.11+](https://www.python.org/downloads/)
+2. 雙擊專案裡的 `run.bat`
+3. 瀏覽器會開啟 `http://127.0.0.1:8765/`
+4. 搜尋暱稱或員工代號 → 預覽班表 → 下載 `.ics` 或複製文字
 
-`run.ps1` / `run.bat` will:
-1. Auto-install the package if needed
-2. Run via `py -m twoshiftly.cli` — **no PATH setup**
-3. OCR each page locally (first run downloads ~10MB ONNX models)
-4. Prompt you to pick an employee → write `.ics`
+第一次執行會自動安裝套件，並下載約 10MB 的 OCR 模型。
 
-## Features
+## 功能
 
-- **100% offline** — no Gemini, no API key, no network after model download
-- **Interactive employee picker** — omit `--employee` and choose from a list
-- **Hours checksum validation** — `--strict` compares 時數 column
-- **Cross-day shift detection** — overnight shifts inferred automatically
-- **ICS export** — Asia/Taipei timezone, RFC 5545
+- **網頁操作** — 上傳、選人、下載，不必打指令
+- **100% 本機** — 班表不上傳雲端
+- **時數檢查** — 畫面上會顯示可疑 OCR 警告
+- **跨日班** — 自動判斷過夜班次
+- **休假推估** — 當日未排班則標為休假
 
-## Install (manual)
+## 開發安裝
 
 ```bash
 pip install -e ".[dev]"
-```
-
-## Usage
-
-```powershell
-# Interactive
-.\run.ps1 convert roster.pdf
-
-# Specify employee
-.\run.ps1 convert roster.pdf --employee Jetson -o jetson.ics --strict
-
-# Extract all employees to JSON
-.\run.ps1 extract roster.pdf --json roster.json
-
-# Inspect
-.\run.ps1 inspect roster.pdf
-```
-
-Equivalent:
-
-```bash
-py -m twoshiftly.cli convert roster.pdf --employee Jetson
-twoshiftly convert roster.pdf --employee Jetson   # if on PATH
-```
-
-## Architecture
-
-```
-PDF (scan) → pypdfium2 render (2480px)
-          → RapidOCR
-          → Ambassador layout parser
-          → validate (hours checksum)
-          → filter employee (+ infer days off)
-          → .ics / .json
-```
-
-Cache: `.twoshiftly/cache/` and `.twoshiftly/render/` next to the PDF.
-
-## Development
-
-```bash
 pytest
 ```
 
-## Supported format
+手動啟動：
 
-Currently calibrated for **國賓影城八德分公司** daily scanned rosters (one page per day, all staff listed).
+```bash
+py -m twoshiftly.web
+```
 
-## Privacy
+## 架構
 
-Do not commit real roster PDFs. Tests use anonymized JSON fixtures.
+```
+PDF → pypdfium2 → RapidOCR → Ambassador layout → validate → filter → .ics
+```
+
+暫存與快取寫在系統暫存目錄（每次上傳獨立工作區）。
+
+## 隱私
+
+請勿把真實班表 PDF 提交進 git。
 
 ## License
 

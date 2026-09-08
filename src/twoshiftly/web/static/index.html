@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>2shiftly</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="bg" aria-hidden="true"></div>
+  <main class="shell">
+    <header class="brand">
+      <p class="brand-mark">2shiftly</p>
+      <p class="brand-sub">班表 PDF → 行事曆，本機離線辨識</p>
+    </header>
+
+    <section id="step-upload" class="panel">
+      <h1>丟入班表</h1>
+      <p class="lede">支援國賓影城掃描班表 PDF。檔案只留在你的電腦。</p>
+      <label class="drop" id="dropzone" for="file-input">
+        <input id="file-input" type="file" accept="application/pdf,.pdf" hidden />
+        <span class="drop-title">拖曳 PDF 到這裡</span>
+        <span class="drop-hint">或點擊選擇檔案</span>
+      </label>
+      <p class="file-name" id="file-name" hidden></p>
+    </section>
+
+    <section id="step-progress" class="panel" hidden>
+      <h1>正在讀取</h1>
+      <p class="lede" id="progress-text">準備中…</p>
+      <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="bar-fill" id="progress-fill"></div>
+      </div>
+    </section>
+
+    <section id="step-search" class="panel" hidden>
+      <h1>查詢員工</h1>
+      <p class="lede" id="range-text"></p>
+      <label class="search-label" for="search-input">輸入員工或員編</label>
+      <input
+        id="search-input"
+        class="search-input"
+        type="search"
+        autocomplete="off"
+        placeholder="輸入員工或員編"
+      />
+      <p class="search-hint" id="search-hint">輸入至少一個字開始搜尋</p>
+      <ul class="people" id="people-list" hidden></ul>
+      <div class="warnings" id="warnings" hidden></div>
+      <button type="button" class="ghost" id="reset-btn">換一份班表</button>
+    </section>
+
+    <section id="step-preview" class="panel" hidden>
+      <h1 id="preview-title">班表預覽</h1>
+      <p class="lede" id="preview-sub"></p>
+      <ul class="shifts" id="shift-list"></ul>
+      <div class="actions">
+        <button type="button" class="btn-primary" id="download-ics">下載行事曆 (.ics)</button>
+        <button type="button" class="btn-secondary" id="copy-text">複製班表文字</button>
+      </div>
+      <p class="copy-status" id="copy-status" hidden></p>
+      <button type="button" class="ghost" id="back-search">改查其他人</button>
+    </section>
+
+    <p class="error" id="error" hidden></p>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

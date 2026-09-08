@@ -33,3 +33,29 @@ def test_parse_ambassador_page_extracts_row():
     assert row.hours == "08:00"
     assert row.section == "售票部"
     assert row.day_type == "平日"
+
+
+def test_parse_ambassador_page_trainer_and_floor_sections():
+    width, height = 2480, 3507
+    boxes = [
+        _box("班別日期: 2026/8/22 星期六", 800, 365),
+        _box("假日訓練員", 120, 560),
+        _box("1325001", 240, 700),
+        _box("Alex", 416, 700),
+        _box("10:00", 566, 700),
+        _box("18:00", 724, 700),
+        _box("08:00", 886, 700),
+        _box("樓層", 100, 900),
+        _box("1325002", 240, 1100),
+        _box("Blair", 416, 1100),
+        _box("12:00", 566, 1100),
+        _box("20:00", 724, 1100),
+        _box("08:00", 886, 1100),
+    ]
+    result = parse_ambassador_page(boxes, page_width=width, page_height=height)
+    assert len(result.rows) == 2
+    assert result.rows[0].nickname == "Alex"
+    assert result.rows[0].section == "訓練員"
+    assert result.rows[0].day_type == "假日"
+    assert result.rows[1].nickname == "Blair"
+    assert result.rows[1].section == "樓層"

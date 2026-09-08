@@ -9,11 +9,16 @@ from twoshiftly.validate import infer_cross_day
 
 
 def _normalize_section(section: str) -> str:
+    """Keep for OCR parsing; departments are not shown in schedule output."""
+    if not section:
+        return ""
+    if any(k in section for k in ("訓練", "训练")):
+        return "訓練員"
     if "售票" in section:
         return "售票部"
-    if "樓層" in section:
+    if any(k in section for k in ("樓層", "楼层")):
         return "樓層"
-    return section or ""
+    return section
 
 
 def _match_row(
@@ -22,13 +27,11 @@ def _match_row(
     employee: str | None,
     employee_id: str | None,
 ) -> bool:
-    if employee_id and row.employee_id == employee_id.strip():
-        return True
-    if employee and (
-        row.nickname.lower() == employee.strip().lower()
-        or employee.strip().lower() in row.nickname.lower()
-    ):
-        return True
+    """Match a row by exact employee ID (preferred) or exact nickname."""
+    if employee_id:
+        return row.employee_id == employee_id.strip()
+    if employee:
+        return row.nickname.lower() == employee.strip().lower()
     return False
 
 
@@ -68,12 +71,11 @@ def list_employees(document: RosterDocument) -> list[tuple[str, str]]:
 
 
 def _row_to_shift(day: dt.date, row: RosterRow, weekday: str) -> Shift:
-    section = _normalize_section(row.section)
     day_type = row.day_type or "平日"
     cross_day = infer_cross_day(row.start_time, row.end_time)
 
     if row.start_time and row.end_time:
-        shift_name = f"{day_type}{section} {row.start_time}-{row.end_time}".strip()
+        shift_name = f"{day_type} {row.start_time}-{row.end_time}".strip()
     else:
         shift_name = "班"
 
@@ -90,7 +92,7 @@ def _row_to_shift(day: dt.date, row: RosterRow, weekday: str) -> Shift:
         end_time=row.end_time,
         is_cross_day=cross_day,
         is_day_off=False,
-        location=section or None,
+        location=None,
         notes="；".join(notes_parts),
     )
 

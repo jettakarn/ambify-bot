@@ -14,3 +14,7 @@ def test_normalize_time_rejects_invalid_minutes():
 def test_parse_section_ambassador_header():
     assert parse_section("平日售票部") == ("平日", "售票部")
     assert parse_section("假日樓層") == ("假日", "樓層")
+    assert parse_section("平日訓練員") == ("平日", "訓練員")
+    assert parse_section("訓練員") == ("", "訓練員")
+    assert parse_section("樓層") == ("", "樓層")
+    assert parse_section("假日售票") == ("假日", "售票部")
