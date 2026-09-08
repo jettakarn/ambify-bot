@@ -9,12 +9,21 @@ from twoshiftly.extract.ocr import OcrBox
 
 DATE_RE = re.compile(r"(\d{4})\s*[/-]\s*(\d{1,2})\s*[/-]\s*(\d{1,2})")
 WEEKDAY_RE = re.compile(r"星期[一二三四五六日天]")
-SECTION_RE = re.compile(r"(平日|假日)\s*(售票|樓層)")
+# Optional day-type + department. OCR may omit 平日/假日 or garble 部.
+SECTION_RE = re.compile(
+    r"(?:(平日|假日)\s*)?(售票部?|樓層|楼层|訓練員|训练员|訓練|训练)"
+)
 TIME_RE = re.compile(r"^\d{1,2}:\d{2}$")
 TIME_FIND_RE = re.compile(r"\d{1,2}:\d{2}")
 EMPLOYEE_ID_RE = re.compile(r"^\d{3,8}$")
 
 HEADER_KEYWORDS = ("員工代號", "工代號", "暱稱", "開始", "结束", "結束", "時數", "时數", "總時數", "總时數")
+
+_SECTION_MAP = (
+    ("訓練員", ("訓練員", "训练员", "訓練", "训练")),
+    ("售票部", ("售票部", "售票")),
+    ("樓層", ("樓層", "楼层")),
+)
 
 
 def parse_page_date(boxes: list[OcrBox], *, header_y_max: float, page_height: float) -> tuple[dt.date | None, str]:
@@ -40,14 +49,34 @@ def parse_page_date(boxes: list[OcrBox], *, header_y_max: float, page_height: fl
     return parsed_date, weekday
 
 
+def _section_label_from_token(token: str) -> str:
+    for label, keywords in _SECTION_MAP:
+        if any(k in token for k in keywords):
+            return label
+    return token
+
+
 def parse_section(text: str) -> tuple[str, str] | None:
     """Return (day_type, section) from a section header line."""
-    normalized = text.replace("部", "")
-    match = SECTION_RE.search(normalized)
+    compact = re.sub(r"\s+", "", text)
+    match = SECTION_RE.search(compact)
     if not match:
+        # Fallback: keyword-only headers without regex anchors
+        for label, keywords in _SECTION_MAP:
+            if any(k in compact for k in keywords):
+                day_type = ""
+                if "平日" in compact:
+                    day_type = "平日"
+                elif "假日" in compact:
+                    day_type = "假日"
+                # Avoid treating long note lines as section headers
+                if len(compact) > 24 and not day_type:
+                    continue
+                return day_type, label
         return None
-    day_type, section = match.groups()
-    section_label = "售票部" if "售票" in section else "樓層"
+
+    day_type = match.group(1) or ""
+    section_label = _section_label_from_token(match.group(2))
     return day_type, section_label
 
 

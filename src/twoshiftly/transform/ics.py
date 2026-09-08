@@ -144,7 +144,7 @@ def _event_lines(
         if shift.is_cross_day:
             end += dt.timedelta(days=1)
 
-        summary = f"{venue} {shift.location or ''} {shift.start_time}-{shift.end_time}".strip()
+        summary = f"{venue} {shift.start_time}-{shift.end_time}".strip()
         lines.extend(
             [
                 "DTSTART;TZID=Asia/Taipei:" + start.strftime("%Y%m%dT%H%M%S"),

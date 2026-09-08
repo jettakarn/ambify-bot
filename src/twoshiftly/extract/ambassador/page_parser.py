@@ -17,6 +17,31 @@ from twoshiftly.extract.ocr import OcrBox
 from twoshiftly.models import PageExtraction, RosterRow
 
 
+def _section_marks_from_boxes(
+    boxes: list[OcrBox],
+    *,
+    page_width: float,
+    page_height: float,
+) -> list[tuple[float, str, str]]:
+    """Collect section headers from raw OCR boxes (any column / left margin)."""
+    marks: list[tuple[float, str, str]] = []
+    y_min = layout.TABLE_Y_MIN * page_height
+    y_max = layout.TABLE_Y_MAX * page_height
+    for box in boxes:
+        if not (y_min <= box.y <= y_max):
+            continue
+        # Section titles sit on the left; ignore far-right noise.
+        if box.x > 0.45 * page_width:
+            continue
+        info = parse_section(box.text)
+        if info is None:
+            continue
+        day_type, section = info
+        marks.append((box.y, day_type, section))
+    marks.sort(key=lambda item: item[0])
+    return marks
+
+
 def parse_ambassador_page(
     boxes: list[OcrBox],
     *,
@@ -39,17 +64,35 @@ def parse_ambassador_page(
         y_tolerance_ratio=layout.ROW_Y_TOLERANCE,
     )
 
+    section_marks = _section_marks_from_boxes(
+        boxes,
+        page_width=page_width,
+        page_height=page_height,
+    )
+    mark_idx = 0
+    y_slop = layout.ROW_Y_TOLERANCE * page_height
+
     rows: list[RosterRow] = []
     current_day_type = ""
     current_section = ""
 
     for table_row in table_rows:
+        while mark_idx < len(section_marks) and section_marks[mark_idx][0] <= table_row.y + y_slop:
+            day_type, section = section_marks[mark_idx][1], section_marks[mark_idx][2]
+            if day_type:
+                current_day_type = day_type
+            current_section = section
+            mark_idx += 1
+
         cell_texts = list(table_row.cells.values())
         joined = "".join(cell_texts)
 
         section_info = parse_section(joined)
         if section_info:
-            current_day_type, current_section = section_info
+            day_type, section = section_info
+            if day_type:
+                current_day_type = day_type
+            current_section = section
             continue
 
         if is_header_row(cell_texts):
