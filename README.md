@@ -24,15 +24,15 @@ The webhook runs on Apps Script. Replies stay in the chat. The roster passes thr
 
 One official account holds one current roster. An admin uploads the PDF. Everyone else looks up a shift by employee number.
 
-+ **Lookups and drop-shift use the week closest to today.** The next week is included when it has already been read. On a shared day, the last upload wins. Drop-shift lists shifts after today. The hours board lists the current month.
++ **Lookups list shifts from today onward.** When next week's roster has not been read, the reply says it may not have been released yet and comes out on Tuesday at the earliest. Drop-shift uses the week closest to today, plus the next week when it has already been read, and lists shifts after today. On a shared day, the last upload wins. The hours board lists the current month and names its first and last published day.
 + **Lookup uses the employee number.** The nickname is shown beside it.
 + **Apps Script is the webhook.** Parsed rosters sit in your Google Drive.
 
 # Features
 
 - The admin sends a PDF. The bot says it received the file, reads it in the background, and then sends the employee list. That usually takes under a minute.
-- Anyone can send an employee number, such as `12345`, and get that person's shifts on the week closest to today. When the next week is already read, those shifts are included.
-- The same PDF bytes are skipped. A later upload of an earlier week stays out of lookups and drop-shift. Those use the week closest to today, plus the next week when that week is already read. Drop-shift lists shifts after today. The hours board includes every read week in the current month and leaves other months out.
+- Anyone can send an employee number, such as `12345`, and get that person's shifts from today onward. When next week's roster has not been read, the reply says it may not have been released yet, and that it comes out on Tuesday at the earliest.
+- The same PDF bytes are skipped. A later upload of an earlier week stays out of lookups and drop-shift. Lookups list shifts from today onward. Drop-shift uses the week closest to today, plus the next week when that week is already read, and lists shifts after today. The hours board includes every read week in the current month, names the first and last published day, and leaves other months out.
 - Keep each file under 15MB. When the free Gemini quota runs out, the reply states the reason.
 - A rich menu in the LINE console sends `排行榜` and `丟換班`. The bot treats those two strings as the menu.
 
@@ -40,7 +40,7 @@ One official account holds one current roster. An admin uploads the PDF. Everyon
 
 Hours use the Taipei calendar month. Each shift is its start-to-end length, then minus 0.5 hours. A result below zero counts as zero. A shift that crosses midnight stays in the month it starts, including the minutes after midnight.
 
-The hours board lists the current Taipei month. Every read week in that month counts, through the last published day of the month. Other months stay out. Days that were never read stay out.
+The hours board lists the current Taipei month. Every read week in that month counts. The reply names the first and last published day of that month. Other months stay out. Days that were never read stay out.
 
 Your hours and rank come first. Under that, only the top five for the month.
 
@@ -101,7 +101,7 @@ One current roster is shared. Only `ADMIN_LINE_USER_ID` can upload a PDF.
 | Someone else sends a PDF or a photo | The bot asks for an employee number |
 | Add the account, roster already read | The name list, then a prompt for an employee number |
 | Add the account, roster still empty | "班表尚未更新。" |
-| An employee number, such as `12345` | That person's shifts on the week closest to today, plus the next week when it is already read. This LINE account is stored against that number |
+| An employee number, such as `12345` | That person's shifts from today onward. This LINE account is stored against that number. If next week is not read yet, the reply says so |
 | `班表`, or any text that is not a number | The name list again |
 | `排行榜` | Your rank and hours for the current month, then the top five |
 | `丟換班` | Who can take one of your shifts after today |

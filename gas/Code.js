@@ -116,16 +116,20 @@ function handleText_(userId, text) {
     return formatRosterSummary(roster.days, now);
   }
 
+  const today = taipeiToday_();
   const selected = collectSchedule(roster.days, trimmed, now);
+  const upcoming = scheduleFromToday(selected, today);
   const reply = formatReply({
     nickname: selected.nickname,
     employeeId: selected.employeeId,
-    days: selected.days,
+    days: upcoming.days,
     matched: selected.matched,
+    hadShifts: selected.days.length > 0,
+    nextWeekNote: selected.matched && !nextWeekPublished(roster.days, today, now),
     rosterDays: roster.days,
     now,
   });
-  if (selected.matched && selected.days.length) {
+  if (selected.matched) {
     userProps_(userId).setProperty("employeeId", selected.employeeId);
   }
   return reply;

@@ -317,7 +317,7 @@ function monthHours(days, year, month, now) {
   });
   const people = Object.keys(totals).map((id) => totals[id]);
   people.sort((left, right) => right.minutes - left.minutes || left.employeeId.localeCompare(right.employeeId));
-  return { ready: true, through, people };
+  return { ready: true, from: inMonth[0], through, people };
 }
 
 function formatHourValue(minutes) {
@@ -334,7 +334,7 @@ function formatLeaderboard(days, employeeId, todayIso, now) {
   const mine = rank === -1 ? { minutes: 0 } : board.people[rank];
   const lines = [
     `你是第 ${rank === -1 ? board.people.length + 1 : rank + 1} 名，本月 ${formatHourValue(mine.minutes)} 小時。`,
-    `統計至 ${shortDate(board.through)}。`,
+    `統計區間 ${shortDate(board.from)}–${shortDate(board.through)}。`,
   ];
   board.people.slice(0, 5).forEach((person, index) => {
     const name = person.nickname ? `${person.employeeId} ${person.nickname}` : person.employeeId;
@@ -530,6 +530,24 @@ function formatDropCandidates(people, drop) {
   return lines.join("\n");
 }
 
+function scheduleFromToday(schedule, todayIso) {
+  return {
+    days: (schedule.days || []).filter((day) => day.date && day.date >= todayIso),
+    matched: schedule.matched,
+    nickname: schedule.nickname,
+    employeeId: schedule.employeeId,
+  };
+}
+
+function nextWeekPublished(days, todayIso, now) {
+  const nextStart = addIsoDays(weekRange(todayIso).start, 7);
+  const nextEnd = addIsoDays(nextStart, 6);
+  return (days || []).some((day) => {
+    const date = normalizeDate(day.date, now) || day.date;
+    return date >= nextStart && date <= nextEnd;
+  });
+}
+
 function formatReply(result) {
   const days = result.days || (result.shifts && result.shifts.length
     ? [{ date: result.date, shifts: result.shifts }]
@@ -543,8 +561,16 @@ function formatReply(result) {
 
   if (!days.length) {
     lines.length = 0;
-    lines.push(result.matched ? "有看到這個編號，但沒讀到上下班時間。" : "找不到這個員工編號。");
-    if (result.rosterDays) return `${lines.join("\n")}\n${formatRosterSummary(result.rosterDays, result.now)}`;
+    if (!result.matched) {
+      lines.push("找不到這個員工編號。");
+      if (result.rosterDays) return `${lines.join("\n")}\n${formatRosterSummary(result.rosterDays, result.now)}`;
+      return lines.join("\n");
+    }
+    lines.push(result.hadShifts ? `${label} 從今天起沒有班。`.trim() : "有看到這個編號，但沒讀到上下班時間。");
+    if (result.nextWeekNote) lines.push("下週班表還沒讀到。可能人事主管還沒發，或管理員還沒更新。下週班表最快本週二出來。");
+    if (!result.hadShifts && result.rosterDays) {
+      return `${lines.join("\n")}\n${formatRosterSummary(result.rosterDays, result.now)}`;
+    }
     return lines.join("\n");
   }
 
@@ -556,6 +582,9 @@ function formatReply(result) {
       if (shift.warning) lines.push(`時數對不上：${shift.warning}`);
     });
   });
+  if (result.nextWeekNote) {
+    lines.push("下週班表還沒讀到。可能人事主管還沒發，或管理員還沒更新。下週班表最快本週二出來。");
+  }
   return lines.join("\n");
 }
 
@@ -568,6 +597,8 @@ if (typeof module !== "undefined") {
     prepareShift,
     selectShifts,
     collectSchedule,
+    scheduleFromToday,
+    nextWeekPublished,
     listEmployees,
     formatRosterSummary,
     formatReply,

@@ -140,7 +140,7 @@ test("leaderboard totals published days in the month without the 1st", () => {
   assert.equal(board.through, "2026-10-07");
   const text = roster.formatLeaderboard(SAMPLE_DAYS, "12345", "2026-10-06", now);
   assert.match(text, /本月 15 小時/);
-  assert.match(text, /統計至 10\/7/);
+  assert.match(text, /統計區間 10\/6–10\/7/);
   assert.equal(
     roster.formatLeaderboard(
       [{ date: "2026-09-30", rows: [{ employee_id: "12345", nickname: "小明", start_time: "09:00", end_time: "18:00" }] }],
@@ -167,7 +167,7 @@ test("leaderboard shows personal rank and only the top five", () => {
   ];
   const text = roster.formatLeaderboard(days, "10001", "2026-10-13", new Date("2026-01-01T00:00:00Z"));
   assert.match(text, /你是第 6 名，本月 0.5 小時。/);
-  assert.match(text, /統計至 10\/1。/);
+  assert.match(text, /統計區間 10\/1–10\/1。/);
   assert.match(text, /1\. 10006 人6 5.5 小時/);
   assert.match(text, /5\. 10002 人2 1.5 小時/);
   assert.doesNotMatch(text, /10001/);
@@ -236,7 +236,7 @@ test("merged weeks total October once the 1st is present and a later day wins", 
   assert.equal(days.find((day) => day.date === "2026-10-01").rows[0].start_time, "10:00");
   const text = roster.formatLeaderboard(days, "10001", "2026-10-13", now);
   assert.match(text, /本月 16 小時/);
-  assert.match(text, /統計至 10\/16/);
+  assert.match(text, /統計區間 10\/1–10\/16/);
   const onlyLater = roster.mergeRosterDays([
     { days: [{ date: "2026-10-16", rows: [{ employee_id: "10001", nickname: "甲", start_time: "09:00", end_time: "18:00" }] }] },
   ], now);
@@ -413,9 +413,48 @@ test("leaderboard keeps the current month and leaves other months out", () => {
   ];
   const text = roster.formatLeaderboard(days, "10001", "2026-10-13", now);
   assert.match(text, /本月 17 小時/);
-  assert.match(text, /統計至 10\/16/);
+  assert.match(text, /統計區間 10\/2–10\/16/);
   assert.doesNotMatch(text, /10002/);
   assert.doesNotMatch(text, /10003/);
+});
+
+test("lookup lists today onward and notes a missing next week", () => {
+  const now = new Date("2026-01-01T00:00:00Z");
+  const days = [
+    { date: "2026-10-09", rows: [{ employee_id: "10001", nickname: "甲", start_time: "09:00", end_time: "18:00" }] },
+    { date: "2026-10-13", rows: [{ employee_id: "10001", nickname: "甲", start_time: "18:00", end_time: "22:00" }] },
+    { date: "2026-10-15", rows: [{ employee_id: "10001", nickname: "甲", start_time: "09:00", end_time: "18:00" }] },
+  ];
+  const selected = roster.collectSchedule(days, "10001", now);
+  const upcoming = roster.scheduleFromToday(selected, "2026-10-13");
+  assert.deepEqual(upcoming.days.map((day) => day.date), ["2026-10-13", "2026-10-15"]);
+  assert.equal(roster.nextWeekPublished(days, "2026-10-13", now), false);
+  const text = roster.formatReply({
+    ...upcoming,
+    hadShifts: selected.days.length > 0,
+    nextWeekNote: true,
+  });
+  assert.match(text, /10\/13/);
+  assert.match(text, /10\/15/);
+  assert.doesNotMatch(text, /10\/9/);
+  assert.match(text, /下週班表還沒讀到/);
+  assert.match(text, /本週二/);
+
+  const laterOnly = roster.scheduleFromToday(
+    roster.collectSchedule(
+      [{ date: "2026-10-09", rows: [{ employee_id: "10001", nickname: "甲", start_time: "09:00", end_time: "18:00" }] }],
+      "10001",
+      now,
+    ),
+    "2026-10-13",
+  );
+  const empty = roster.formatReply({
+    ...laterOnly,
+    hadShifts: true,
+    nextWeekNote: true,
+  });
+  assert.match(empty, /從今天起沒有班/);
+  assert.doesNotMatch(empty, /沒讀到上下班時間/);
 });
 
 test("drop choices skip today and keep a later week", () => {
