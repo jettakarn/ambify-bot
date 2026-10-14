@@ -98,7 +98,9 @@ test("query reply lists each date and has no calendar link", () => {
   const text = roster.formatReply(selected);
   assert.match(text, /12345 小明 的班表/);
   assert.match(text, /10\/6（二）/);
-  assert.match(text, /跨日/);
+  assert.match(text, /18:00–01:00/);
+  assert.doesNotMatch(text, /跨日/);
+  assert.doesNotMatch(text, /07:00/);
   assert.match(text, /10\/7（三）/);
   assert.doesNotMatch(text, /行事曆/);
 });
@@ -458,6 +460,25 @@ test("lookup lists today onward and notes a missing next week", () => {
   assert.doesNotMatch(empty, /沒讀到上下班時間/);
 });
 
+test("lookup shows TC or FL on each shift", () => {
+  const now = new Date("2026-01-01T00:00:00Z");
+  const days = [
+    {
+      date: "2026-10-16",
+      rows: [{ employee_id: "1326902", nickname: "Lydia", department: "平日售票部", start_time: "09:00", end_time: "18:00" }],
+    },
+    {
+      date: "2026-10-17",
+      rows: [{ employee_id: "1326902", nickname: "Lydia", department: "假日樓層", start_time: "18:00", end_time: "01:00" }],
+    },
+  ];
+  const text = roster.formatReply(roster.collectSchedule(days, "1326902", now));
+  assert.match(text, /10\/16（五）\nTC 09:00–18:00/);
+  assert.match(text, /10\/17（六）\nFL 18:00–01:00/);
+  assert.doesNotMatch(text, /跨日/);
+  assert.doesNotMatch(text, /07:00/);
+});
+
 test("department labels are TC and FL", () => {
   assert.equal(roster.normalizeDepartment("平日售票部"), "TC");
   assert.equal(roster.normalizeDepartment("假日樓層"), "FL");
@@ -495,12 +516,11 @@ test("today board lists TC then FL without employee ids", () => {
     },
   ];
   const text = roster.formatTodayBoard(days, "2026-10-16", now);
-  assert.match(text, /10\/16（五）/);
+  assert.match(text, /10\/16（五）\n\nTC\n/);
   const tc = text.split("\nFL\n")[0];
-  assert.match(tc, /正職 09:00–18:00/);
-  assert.match(tc, /Lydia 09:00–18:00/);
-  assert.match(text, /FL\nBen 09:00–18:00\nPeggy 09:30–18:00/);
-  assert.match(text, /未分部門\n未具名 17:00–23:00/);
+  assert.match(tc, /09:00–18:00  (?:正職、Lydia|Lydia、正職)/);
+  assert.match(text, /FL\n09:00–18:00  Ben\n09:30–18:00  Peggy/);
+  assert.match(text, /未分部門\n17:00–23:00  未具名/);
   assert.doesNotMatch(text, /211/);
   assert.doesNotMatch(text, /1326902/);
   assert.equal(roster.formatTodayBoard(days, "2026-10-18", now), "今天沒有班表。");

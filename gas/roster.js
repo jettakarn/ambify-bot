@@ -363,18 +363,22 @@ function formatTodayBoard(days, todayIso, now) {
   }, { includeFullTime: true });
   const listed = groups.TC.length + groups.FL.length + groups[""].length;
   if (!listed) return "今天沒有班表。";
-  const lines = [formatWhen(todayIso)];
+  const lines = [formatWhen(todayIso), ""];
   [["TC", "TC"], ["FL", "FL"], ["", "未分部門"]].forEach((pair) => {
     const shifts = groups[pair[0]];
     if (!shifts.length) return;
-    shifts.sort((left, right) => (
-      left.startTime < right.startTime ? -1
-        : left.startTime > right.startTime ? 1
-          : (left.nickname || "").localeCompare(right.nickname || "")
-    ));
+    if (lines[lines.length - 1] !== "") lines.push("");
     lines.push(pair[1]);
+    const buckets = {};
     shifts.forEach((shift) => {
-      lines.push(`${shift.nickname || "未具名"} ${shift.startTime}–${shift.endTime}`);
+      const key = `${shift.startTime}|${shift.endTime}`;
+      if (!buckets[key]) buckets[key] = [];
+      buckets[key].push(shift.nickname || "未具名");
+    });
+    Object.keys(buckets).sort().forEach((key) => {
+      const names = buckets[key].sort((left, right) => left.localeCompare(right));
+      const [startTime, endTime] = key.split("|");
+      lines.push(`${startTime}–${endTime}  ${names.join("、")}`);
     });
   });
   return lines.join("\n");
@@ -614,9 +618,8 @@ function formatReply(result) {
   days.forEach((day) => {
     if (days.length > 1) lines.push(formatWhen(day.date));
     (day.shifts || []).forEach((shift) => {
-      const span = shift.crossDay ? "，跨日" : "";
-      lines.push(`${shift.startTime}–${shift.endTime}（${shift.computed}${span}）`);
-      if (shift.warning) lines.push(`時數對不上：${shift.warning}`);
+      const place = shift.department ? `${shift.department} ` : "";
+      lines.push(`${place}${shift.startTime}–${shift.endTime}`);
     });
   });
   if (result.nextWeekNote) {
