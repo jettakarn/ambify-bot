@@ -168,8 +168,9 @@ test("leaderboard shows personal rank and only the top five", () => {
   const text = roster.formatLeaderboard(days, "10001", "2026-10-13", new Date("2026-01-01T00:00:00Z"));
   assert.match(text, /你是第 6 名，本月 0.5 小時。/);
   assert.match(text, /統計區間 10\/1–10\/1。/);
-  assert.match(text, /1\. 10006 人6 5.5 小時/);
-  assert.match(text, /5\. 10002 人2 1.5 小時/);
+  assert.match(text, /1\. 人6 5.5 小時/);
+  assert.match(text, /5\. 人2 1.5 小時/);
+  assert.doesNotMatch(text, /10006/);
   assert.doesNotMatch(text, /10001/);
 });
 
@@ -455,6 +456,54 @@ test("lookup lists today onward and notes a missing next week", () => {
   });
   assert.match(empty, /從今天起沒有班/);
   assert.doesNotMatch(empty, /沒讀到上下班時間/);
+});
+
+test("department labels are TC and FL", () => {
+  assert.equal(roster.normalizeDepartment("平日售票部"), "TC");
+  assert.equal(roster.normalizeDepartment("假日樓層"), "FL");
+  assert.equal(roster.normalizeDepartment("TC"), "TC");
+  assert.equal(roster.normalizeDepartment("櫃台"), "");
+  const shift = roster.prepareShift({
+    employee_id: "1326902",
+    nickname: "Lydia",
+    department: "平日售票部",
+    start_time: "09:00",
+    end_time: "18:00",
+    hours: "09:00",
+  });
+  assert.equal(shift.department, "TC");
+});
+
+test("today board lists TC then FL without employee ids", () => {
+  const now = new Date("2026-01-01T00:00:00Z");
+  const days = [
+    {
+      date: "2026-10-16",
+      rows: [
+        { employee_id: "211", nickname: "正職", department: "售票部", start_time: "09:00", end_time: "18:00" },
+        { employee_id: "1326902", nickname: "Lydia", department: "平日售票部", start_time: "09:00", end_time: "18:00" },
+        { employee_id: "1321901", nickname: "Peggy", department: "平日樓層", start_time: "09:30", end_time: "18:00" },
+        { employee_id: "1326502", nickname: "Ben", department: "樓層", start_time: "09:00", end_time: "18:00" },
+        { employee_id: "10001", nickname: "", department: "", start_time: "17:00", end_time: "23:00" },
+      ],
+    },
+    {
+      date: "2026-10-17",
+      rows: [
+        { employee_id: "1326902", nickname: "Lydia", department: "TC", start_time: "09:00", end_time: "18:00" },
+      ],
+    },
+  ];
+  const text = roster.formatTodayBoard(days, "2026-10-16", now);
+  assert.match(text, /10\/16（五）/);
+  const tc = text.split("\nFL\n")[0];
+  assert.match(tc, /正職 09:00–18:00/);
+  assert.match(tc, /Lydia 09:00–18:00/);
+  assert.match(text, /FL\nBen 09:00–18:00\nPeggy 09:30–18:00/);
+  assert.match(text, /未分部門\n未具名 17:00–23:00/);
+  assert.doesNotMatch(text, /211/);
+  assert.doesNotMatch(text, /1326902/);
+  assert.equal(roster.formatTodayBoard(days, "2026-10-18", now), "今天沒有班表。");
 });
 
 test("drop choices skip today and keep a later week", () => {

@@ -138,6 +138,7 @@ function handleText_(userId, text) {
 function menuAction_(text) {
   if (text === "排行榜" || text === "工作時數排行榜") return "hours";
   if (text === "丟換班" || text === "丟換班查詢") return "drop";
+  if (text === "今日班表") return "today";
   return "";
 }
 
@@ -151,14 +152,18 @@ function handleMenu_(event, userId, data) {
     sendText_(event, NOT_UPDATED);
     return;
   }
+  const now = queryNow_();
+  const today = taipeiToday_();
+  if (data === "today") {
+    sendText_(event, formatTodayBoard(roster.days, today, now));
+    return;
+  }
   const employeeId = userProps_(userId).getProperty("employeeId");
   if (!employeeId) {
     sendText_(event, NEED_BIND);
     return;
   }
 
-  const now = queryNow_();
-  const today = taipeiToday_();
   if (data === "hours") {
     const monthRoster = loadMergedRoster_();
     if (!monthRoster) {
@@ -356,11 +361,13 @@ function downloadLineContent_(token, message) {
 function askGemini_(config, media) {
   const prompt = [
     "你在讀國賓影城的掃描班表 PDF，可能有很多頁。",
-    "每一頁抽出頁首日期，以及每一列的員工代號、暱稱、開始時間、結束時間、時數。",
+    "每一頁抽出頁首日期，以及每一列的員工代號、暱稱、開始時間、結束時間、時數、部門。",
+    "青色橫條是部門。橫條下面的列都算這個部門，直到下一條橫條。去掉「平日」和「假日」，售票部寫 TC，樓層寫 FL。",
+    "表格外面的手寫不要讀。",
     "同一天的多頁合併到同一個 date。",
     "時間用 24 小時制 HH:MM。看不清的格子留空，不要猜。",
     "抽出所有列，不要只留一個人。",
-    "只回 JSON，格式：{\"days\":[{\"date\":\"YYYY-MM-DD\",\"rows\":[{\"employee_id\":\"\",\"nickname\":\"\",\"start_time\":\"HH:MM\",\"end_time\":\"HH:MM\",\"hours\":\"HH:MM\"}]}]}",
+    "只回 JSON，格式：{\"days\":[{\"date\":\"YYYY-MM-DD\",\"rows\":[{\"employee_id\":\"\",\"nickname\":\"\",\"department\":\"TC\",\"start_time\":\"HH:MM\",\"end_time\":\"HH:MM\",\"hours\":\"HH:MM\"}]}]}",
   ].join("\n");
 
   const models = [config.model].concat(GEMINI_FALLBACKS).filter((name, index, all) => name && all.indexOf(name) === index);

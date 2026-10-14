@@ -34,7 +34,7 @@ One official account holds one current roster. An admin uploads the PDF. Everyon
 - Anyone can send an employee number, such as `12345`, and get that person's shifts from today onward. When next week's roster has not been read, the reply says it may not have been released yet, and that it comes out on Tuesday at the earliest.
 - The same PDF bytes are skipped. A later upload of an earlier week stays out of lookups and drop-shift. Lookups list shifts from today onward. Drop-shift uses the week closest to today, plus the next week when that week is already read, and lists shifts after today. The hours board includes every read week in the current month, names the first and last published day, and leaves other months out.
 - Keep each file under 15MB. When the free Gemini quota runs out, the reply states the reason.
-- A rich menu in the LINE console sends `排行榜` and `丟換班`. The bot treats those two strings as the menu.
+- A rich menu in the LINE console sends `排行榜`, `丟換班`, and `今日班表`. The bot treats those three strings as the menu.
 
 ### Hours
 
@@ -42,7 +42,7 @@ Hours use the Taipei calendar month. Each shift is its start-to-end length, then
 
 The hours board lists the current Taipei month. Every read week in that month counts. The reply names the first and last published day of that month. Other months stay out. Days that were never read stay out.
 
-Your hours and rank come first. Under that, only the top five for the month.
+Your hours and rank come first. Under that, only the top five names for the month.
 
 ### Drop shift
 
@@ -54,7 +54,7 @@ A person qualifies when all three hold:
 - At least 11 hours after the previous day's end, and at least 11 hours before the next day's start. A side with no shift counts as clear. The gap uses the real clock times, before the 0.5 hour cut.
 - After taking the shift, they are on the schedule for at most 5 days that week.
 
-Three-digit employee numbers are full-time staff. They stay out of the name list, lookups, the hours board, and this reply.
+Three-digit employee numbers are full-time staff. They stay out of the name list, lookups, the hours board, and this reply. Today's board still lists their nicknames and shift times.
 
 The dropped shift's start time sets its type: 09:00–10:59 morning, 11:00–14:59 mid, 17:00–19:59 evening. A person uses the type that appears most often on the rosters already read. A tie, or any start outside those windows, is a floating shift. The reply keeps people of the dropped shift's type, mid-shift people, and floating-shift people. A dropped shift outside the three windows keeps mid-shift and floating-shift people. A floating shift is marked "（流動班別）". Mid-shift people appear once. An empty list replies "目前無合規人員可接班。" The menu asks for an employee number until this LINE account has looked one up.
 
@@ -105,9 +105,10 @@ One current roster is shared. Only `ADMIN_LINE_USER_ID` can upload a PDF.
 | `班表`, or any text that is not a number | The name list again |
 | `排行榜` | Your rank and hours for the current month, then the top five |
 | `丟換班` | Who can take one of your shifts after today |
+| `今日班表` | Today's TC and FL, nicknames and shift times, including full-time staff |
 | The same PDF again | The stored roster is reused |
 
-Set the bottom menu in the LINE console. The buttons send the text `排行榜` and `丟換班`.
+Set the bottom menu in the LINE console. The buttons send the text `排行榜`, `丟換班`, and `今日班表`.
 
 # Settings
 
@@ -118,7 +119,7 @@ Script properties are the configuration.
 - **Admin** is one LINE userId. Leave it empty, send the bot any message, and paste the userId from the reply.
 - **Roster folder** is a Drive folder ID. Roster JSON and upload PDFs are created there. A roster already saved elsewhere moves into this folder the next time it is opened.
 - **Webhook** is the web app `/exec` URL. Use webhook stays on. Auto-reply and the add-friend greeting stay off.
-- **Menu** is a rich menu in the LINE console. The two buttons send `排行榜` and `丟換班`.
+- **Menu** is a rich menu in the LINE console. The three buttons send `排行榜`, `丟換班`, and `今日班表`.
 
 # LLM policy
 

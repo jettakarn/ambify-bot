@@ -86,6 +86,13 @@ function formatMinutes(total) {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
+function normalizeDepartment(value) {
+  const text = String(value || "").replace(/\s+/g, "");
+  if (!text) return "";
+  if (text === "TC" || text.indexOf("售票") !== -1) return "TC";
+  if (text === "FL" || text.indexOf("樓層") !== -1) return "FL";
+  return "";
+}
 function inferCrossDay(startTime, endTime) {
   if (!startTime || !endTime) return false;
   return parseMinutes(endTime) <= parseMinutes(startTime);
@@ -112,6 +119,7 @@ function prepareShift(row) {
   return {
     employeeId: compactEmployeeId(row.employee_id || row.employeeId),
     nickname: String(row.nickname || "").trim(),
+    department: normalizeDepartment(row.department),
     startTime,
     endTime,
     hours,
@@ -266,13 +274,16 @@ function overlapMinutes(left, right) {
   return Math.round((end - start) / 60000);
 }
 
-function eachRosterShift(days, now, visit) {
+function eachRosterShift(days, now, visit, options) {
+  const includeFullTime = Boolean(options && options.includeFullTime);
   for (const day of days || []) {
     const date = normalizeDate(day.date, now);
     if (!date) continue;
     for (const row of day.rows || []) {
       const shift = prepareShift(row);
-      if (shift && !isFullTimeId(shift.employeeId)) visit(date, shift);
+      if (!shift) continue;
+      if (!includeFullTime && isFullTimeId(shift.employeeId)) continue;
+      visit(date, shift);
     }
   }
 }
@@ -337,8 +348,34 @@ function formatLeaderboard(days, employeeId, todayIso, now) {
     `統計區間 ${shortDate(board.from)}–${shortDate(board.through)}。`,
   ];
   board.people.slice(0, 5).forEach((person, index) => {
-    const name = person.nickname ? `${person.employeeId} ${person.nickname}` : person.employeeId;
+    const name = person.nickname || "未具名";
     lines.push(`${index + 1}. ${name} ${formatHourValue(person.minutes)} 小時`);
+  });
+  return lines.join("\n");
+}
+
+function formatTodayBoard(days, todayIso, now) {
+  const groups = { TC: [], FL: [], "": [] };
+  eachRosterShift(days, now, (date, shift) => {
+    if (date !== todayIso) return;
+    const department = groups[shift.department] ? shift.department : "";
+    groups[department].push(shift);
+  }, { includeFullTime: true });
+  const listed = groups.TC.length + groups.FL.length + groups[""].length;
+  if (!listed) return "今天沒有班表。";
+  const lines = [formatWhen(todayIso)];
+  [["TC", "TC"], ["FL", "FL"], ["", "未分部門"]].forEach((pair) => {
+    const shifts = groups[pair[0]];
+    if (!shifts.length) return;
+    shifts.sort((left, right) => (
+      left.startTime < right.startTime ? -1
+        : left.startTime > right.startTime ? 1
+          : (left.nickname || "").localeCompare(right.nickname || "")
+    ));
+    lines.push(pair[1]);
+    shifts.forEach((shift) => {
+      lines.push(`${shift.nickname || "未具名"} ${shift.startTime}–${shift.endTime}`);
+    });
   });
   return lines.join("\n");
 }
@@ -595,6 +632,7 @@ if (typeof module !== "undefined") {
     normalizeTime,
     normalizeDate,
     prepareShift,
+    normalizeDepartment,
     selectShifts,
     collectSchedule,
     scheduleFromToday,
@@ -607,6 +645,7 @@ if (typeof module !== "undefined") {
     shiftPaidMinutes,
     monthHours,
     formatLeaderboard,
+    formatTodayBoard,
     shiftsInWeek,
     shiftsAfter,
     mergeRosterDays,
