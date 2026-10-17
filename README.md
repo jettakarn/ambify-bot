@@ -38,7 +38,7 @@ One official account holds one current roster. An admin uploads the PDF. Everyon
 
 ### Hours
 
-Hours use the Taipei calendar month. Each shift is its start-to-end length, then minus 0.5 hours. A result below zero counts as zero. A shift that crosses midnight stays in the month it starts, including the minutes after midnight.
+Hours use the Taipei calendar month. Each shift is its start-to-end length, then minus 0.5 hours when that length is under 9 hours, or 1 hour when it is 9 hours or more. A result below zero counts as zero. A shift that crosses midnight stays in the month it starts, including the minutes after midnight.
 
 The hours board lists the current Taipei month. Every read week in that month counts. The reply names the first and last published day of that month. Other months stay out. Days that were never read stay out.
 
@@ -51,7 +51,7 @@ The bot names who can take one of your shifts after today on that roster, includ
 A person qualifies when all three hold:
 
 - The drop day is empty for them. A cross-day shift that lands on that day counts as work.
-- At least 11 hours after the previous day's end, and at least 11 hours before the next day's start. A side with no shift counts as clear. The gap uses the real clock times, before the 0.5 hour cut.
+- At least 11 hours after the previous day's end, and at least 11 hours before the next day's start. A side with no shift counts as clear. The gap uses the real clock times, before the rest is removed.
 - After taking the shift, they are on the schedule for at most 5 days that week.
 
 Three-digit employee numbers are full-time staff. They stay out of the name list, lookups, the hours board, and this reply. Today's board still lists their nicknames and shift times.
