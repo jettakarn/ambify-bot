@@ -96,8 +96,8 @@ test("query reply lists each date and has no calendar link", () => {
     new Date("2026-01-01T00:00:00Z"),
   );
   const text = roster.formatReply(selected);
-  assert.match(text, /12345 小明 的班表/);
-  assert.match(text, /10\/6（二）/);
+  assert.match(text, /12345 小明\n\n10\/6（二）\n18:00–01:00\n\n10\/7（三）/);
+  assert.doesNotMatch(text, /的班表/);
   assert.match(text, /18:00–01:00/);
   assert.doesNotMatch(text, /跨日/);
   assert.doesNotMatch(text, /07:00/);
@@ -436,11 +436,11 @@ test("lookup lists today onward and notes a missing next week", () => {
     ...upcoming,
     hadShifts: selected.days.length > 0,
     nextWeekNote: true,
+    today: "2026-10-13",
   });
-  assert.match(text, /10\/13/);
-  assert.match(text, /10\/15/);
+  assert.match(text, /10\/13（二）\n18:00–22:00\n\n10\/15（四）/);
   assert.doesNotMatch(text, /10\/9/);
-  assert.match(text, /下週班表還沒讀到/);
+  assert.match(text, /下週（10\/16–10\/22）的班表還沒讀到，所以上面沒有那幾天/);
   assert.match(text, /本週二/);
 
   const laterOnly = roster.scheduleFromToday(
@@ -455,6 +455,7 @@ test("lookup lists today onward and notes a missing next week", () => {
     ...laterOnly,
     hadShifts: true,
     nextWeekNote: true,
+    today: "2026-10-13",
   });
   assert.match(empty, /從今天起沒有班/);
   assert.doesNotMatch(empty, /沒讀到上下班時間/);
@@ -473,8 +474,7 @@ test("lookup shows TC or FL on each shift", () => {
     },
   ];
   const text = roster.formatReply(roster.collectSchedule(days, "1326902", now));
-  assert.match(text, /10\/16（五）\nTC 09:00–18:00/);
-  assert.match(text, /10\/17（六）\nFL 18:00–01:00/);
+  assert.match(text, /1326902 Lydia\n\n10\/16（五）\nTC  09:00–18:00\n\n10\/17（六）\nFL  18:00–01:00/);
   assert.doesNotMatch(text, /跨日/);
   assert.doesNotMatch(text, /07:00/);
 });

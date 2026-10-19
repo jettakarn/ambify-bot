@@ -24,14 +24,14 @@ The webhook runs on Apps Script. Replies stay in the chat. The roster passes thr
 
 One official account holds one current roster. An admin uploads the PDF. Everyone else looks up a shift by employee number.
 
-+ **Lookups list shifts from today onward.** When next week's roster has not been read, the reply says it may not have been released yet and comes out on Tuesday at the earliest. Drop-shift uses the week closest to today, plus the next week when it has already been read, and lists shifts after today. On a shared day, the last upload wins. The hours board lists the current month and names its first and last published day.
++ **Lookups list shifts from today onward.** Each day is separated by a blank line. When next week's roster has not been read, the reply names that Friday–Thursday range and says those days are not listed yet. It may not have been released, or the admin has not updated it, and it comes out on Tuesday at the earliest. Drop-shift uses the week closest to today, plus the next week when it has already been read, and lists shifts after today. On a shared day, the last upload wins. The hours board lists the current month and names its first and last published day.
 + **Lookup uses the employee number.** The nickname is shown beside it.
 + **Apps Script is the webhook.** Parsed rosters sit in your Google Drive.
 
 # Features
 
 - The admin sends a PDF. The bot says it received the file, reads it in the background, and then sends the employee list. That usually takes under a minute.
-- Anyone can send an employee number, such as `12345`, and get that person's shifts from today onward. Each shift is marked `TC` or `FL` and shows only the clock times. When next week's roster has not been read, the reply says it may not have been released yet, and that it comes out on Tuesday at the earliest.
+- Anyone can send an employee number, such as `12345`, and get that person's shifts from today onward, with a blank line between days. Each shift is marked `TC` or `FL` and shows only the clock times. When next week's roster has not been read, the reply names that Friday–Thursday range and says those days are not listed yet. It may not have been released, or the admin has not updated it, and it comes out on Tuesday at the earliest.
 - The same PDF bytes are skipped. A later upload of an earlier week stays out of lookups and drop-shift. Lookups list shifts from today onward. Drop-shift uses the week closest to today, plus the next week when that week is already read, and lists shifts after today. The hours board includes every read week in the current month, names the first and last published day, and leaves other months out.
 - Keep each file under 15MB. When the free Gemini quota runs out, the reply states the reason.
 - A rich menu in the LINE console sends `排行榜`, `丟換班`, and `今日班表`. The bot treats those three strings as the menu.
@@ -101,7 +101,7 @@ One current roster is shared. Only `ADMIN_LINE_USER_ID` can upload a PDF.
 | Someone else sends a PDF or a photo | The bot asks for an employee number |
 | Add the account, roster already read | The name list, then a prompt for an employee number |
 | Add the account, roster still empty | "班表尚未更新。" |
-| An employee number, such as `12345` | That person's shifts from today onward. Each shift is marked `TC` or `FL` and shows only the clock times. This LINE account is stored against that number. If next week is not read yet, the reply says so |
+| An employee number, such as `12345` | That person's shifts from today onward, with a blank line between days. Each shift is marked `TC` or `FL` and shows only the clock times. This LINE account is stored against that number. If next week is not read yet, the reply names that week's dates |
 | `班表`, or any text that is not a number | The name list again |
 | `排行榜` | Your rank and hours for the current month, then the top five |
 | `丟換班` | Who can take one of your shifts after today |

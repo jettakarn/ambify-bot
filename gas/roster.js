@@ -589,6 +589,13 @@ function nextWeekPublished(days, todayIso, now) {
   });
 }
 
+function missingNextWeekText(todayIso) {
+  const start = addIsoDays(weekRange(todayIso).start, 7);
+  const end = addIsoDays(start, 6);
+  const range = `${shortDate(start)}–${shortDate(end)}`;
+  return `下週（${range}）的班表還沒讀到，所以上面沒有那幾天。可能人事主管還沒發，或管理員還沒更新，最快本週二出來。`;
+}
+
 function formatReply(result) {
   const days = result.days || (result.shifts && result.shifts.length
     ? [{ date: result.date, shifts: result.shifts }]
@@ -596,34 +603,33 @@ function formatReply(result) {
   const label = result.nickname
     ? `${result.employeeId || ""} ${result.nickname}`.trim()
     : (result.employeeId || "");
-  const lines = days.length > 1
-    ? [`${label} 的班表`]
-    : [`${formatWhen(result.date || (days[0] && days[0].date))} ${label}`.trim()];
+  const lines = [];
 
   if (!days.length) {
-    lines.length = 0;
     if (!result.matched) {
       lines.push("找不到這個員工編號。");
       if (result.rosterDays) return `${lines.join("\n")}\n${formatRosterSummary(result.rosterDays, result.now)}`;
       return lines.join("\n");
     }
     lines.push(result.hadShifts ? `${label} 從今天起沒有班。`.trim() : "有看到這個編號，但沒讀到上下班時間。");
-    if (result.nextWeekNote) lines.push("下週班表還沒讀到。可能人事主管還沒發，或管理員還沒更新。下週班表最快本週二出來。");
+    if (result.nextWeekNote) lines.push(missingNextWeekText(result.today));
     if (!result.hadShifts && result.rosterDays) {
       return `${lines.join("\n")}\n${formatRosterSummary(result.rosterDays, result.now)}`;
     }
     return lines.join("\n");
   }
 
-  days.forEach((day) => {
-    if (days.length > 1) lines.push(formatWhen(day.date));
+  if (label) lines.push(label, "");
+  days.forEach((day, index) => {
+    if (index > 0) lines.push("");
+    lines.push(formatWhen(day.date));
     (day.shifts || []).forEach((shift) => {
-      const place = shift.department ? `${shift.department} ` : "";
+      const place = shift.department ? `${shift.department}  ` : "";
       lines.push(`${place}${shift.startTime}–${shift.endTime}`);
     });
   });
   if (result.nextWeekNote) {
-    lines.push("下週班表還沒讀到。可能人事主管還沒發，或管理員還沒更新。下週班表最快本週二出來。");
+    lines.push("", missingNextWeekText(result.today));
   }
   return lines.join("\n");
 }

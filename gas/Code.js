@@ -126,6 +126,7 @@ function handleText_(userId, text) {
     matched: selected.matched,
     hadShifts: selected.days.length > 0,
     nextWeekNote: selected.matched && !nextWeekPublished(roster.days, today, now),
+    today,
     rosterDays: roster.days,
     now,
   });
