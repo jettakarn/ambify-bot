@@ -123,13 +123,14 @@ test("overnight shift stays in the month it starts", () => {
   assert.equal(roster.shiftPaidMinutes("2026-09-30", "18:00", "01:00", true, 2026, 9), 390);
   assert.equal(roster.shiftPaidMinutes("2026-09-30", "18:00", "01:00", true, 2026, 10), 0);
   assert.equal(roster.shiftPaidMinutes("2026-10-01", "09:00", "09:20", false), 0);
+  assert.equal(roster.shiftPaidMinutes("2026-10-01", "09:00", "19:00", false), 9 * 60);
   const now = new Date("2026-01-01T00:00:00Z");
   const days = [
     { date: "2026-09-30", rows: [{ employee_id: "10001", nickname: "甲", start_time: "18:00", end_time: "01:00" }] },
     { date: "2026-10-01", rows: [{ employee_id: "10002", nickname: "乙", start_time: "09:00", end_time: "18:00" }] },
   ];
   const october = roster.formatLeaderboard(days, "10002", "2026-10-13", now);
-  assert.match(october, /本月 8.5 小時/);
+  assert.match(october, /本月 8 小時/);
   assert.doesNotMatch(october, /10001/);
   const september = roster.monthHours(days, 2026, 9, now);
   assert.equal(september.people.find((person) => person.employeeId === "10001").minutes, 390);
@@ -141,7 +142,7 @@ test("leaderboard totals published days in the month without the 1st", () => {
   assert.equal(board.ready, true);
   assert.equal(board.through, "2026-10-07");
   const text = roster.formatLeaderboard(SAMPLE_DAYS, "12345", "2026-10-06", now);
-  assert.match(text, /本月 15 小時/);
+  assert.match(text, /本月 14.5 小時/);
   assert.match(text, /統計區間 10\/6–10\/7/);
   assert.equal(
     roster.formatLeaderboard(
@@ -238,12 +239,12 @@ test("merged weeks total October once the 1st is present and a later day wins", 
   ], now);
   assert.equal(days.find((day) => day.date === "2026-10-01").rows[0].start_time, "10:00");
   const text = roster.formatLeaderboard(days, "10001", "2026-10-13", now);
-  assert.match(text, /本月 16 小時/);
+  assert.match(text, /本月 15.5 小時/);
   assert.match(text, /統計區間 10\/1–10\/16/);
   const onlyLater = roster.mergeRosterDays([
     { days: [{ date: "2026-10-16", rows: [{ employee_id: "10001", nickname: "甲", start_time: "09:00", end_time: "18:00" }] }] },
   ], now);
-  assert.match(roster.formatLeaderboard(onlyLater, "10001", "2026-10-13", now), /本月 8.5 小時/);
+  assert.match(roster.formatLeaderboard(onlyLater, "10001", "2026-10-13", now), /本月 8 小時/);
 });
 
 test("three-digit staff ids stay out of lookup, the name list, hours, and drop shift", () => {
@@ -415,7 +416,7 @@ test("leaderboard keeps the current month and leaves other months out", () => {
     },
   ];
   const text = roster.formatLeaderboard(days, "10001", "2026-10-13", now);
-  assert.match(text, /本月 17 小時/);
+  assert.match(text, /本月 16 小時/);
   assert.match(text, /統計區間 10\/2–10\/16/);
   assert.doesNotMatch(text, /10002/);
   assert.doesNotMatch(text, /10003/);

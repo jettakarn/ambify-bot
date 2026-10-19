@@ -252,7 +252,8 @@ function overlaps(left, right) {
 
 function paidInterval(date, startTime, endTime, crossDay) {
   const span = intervalOf(date, startTime, endTime, crossDay);
-  const start = span.start + 30 * 60 * 1000;
+  const rest = durationMinutes(startTime, endTime, crossDay) >= 9 * 60 ? 60 : 30;
+  const start = span.start + rest * 60 * 1000;
   if (start >= span.end) return null;
   return { start, end: span.end };
 }
