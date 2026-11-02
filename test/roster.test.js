@@ -475,7 +475,7 @@ test("lookup shows TC or FL on each shift", () => {
     },
   ];
   const text = roster.formatReply(roster.collectSchedule(days, "1326902", now));
-  assert.match(text, /1326902 Lydia\n\n10\/16（五）\nTC  09:00–18:00\n\n10\/17（六）\nFL  18:00–01:00/);
+  assert.match(text, /1326902 Lydia\n\n10\/16（五）\nTicketing & Candy Bar \(TC\)  09:00–18:00\n\n10\/17（六）\nFloor \(FL\)  18:00–01:00/);
   assert.doesNotMatch(text, /跨日/);
   assert.doesNotMatch(text, /07:00/);
 });
@@ -485,6 +485,8 @@ test("department labels are TC and FL", () => {
   assert.equal(roster.normalizeDepartment("假日樓層"), "FL");
   assert.equal(roster.normalizeDepartment("TC"), "TC");
   assert.equal(roster.normalizeDepartment("櫃台"), "");
+  assert.equal(roster.normalizeDepartment("F"), "FL");
+  assert.equal(roster.normalizeDepartment("T"), "");
   const shift = roster.prepareShift({
     employee_id: "1326902",
     nickname: "Lydia",
@@ -517,14 +519,66 @@ test("today board lists TC then FL without employee ids", () => {
     },
   ];
   const text = roster.formatTodayBoard(days, "2026-10-16", now);
-  assert.match(text, /10\/16（五）\n\nTC\n/);
-  const tc = text.split("\nFL\n")[0];
+  assert.match(text, /10\/16（五）\n\nTicketing & Candy Bar \(TC\)\n/);
+  const tc = text.split("\nFloor (FL)\n")[0];
   assert.match(tc, /09:00–18:00  (?:正職、Lydia|Lydia、正職)/);
-  assert.match(text, /FL\n09:00–18:00  Ben\n09:30–18:00  Peggy/);
+  assert.match(text, /Floor \(FL\)\n09:00–18:00  Ben\n09:30–18:00  Peggy/);
   assert.match(text, /未分部門\n17:00–23:00  未具名/);
   assert.doesNotMatch(text, /211/);
   assert.doesNotMatch(text, /1326902/);
   assert.equal(roster.formatTodayBoard(days, "2026-10-18", now), "今天沒有班表。");
+});
+
+test("today board lists trainers, floor closing, remarks, and handwritten shifts", () => {
+  const now = new Date("2026-01-01T00:00:00Z");
+  const days = [
+    {
+      date: "2026-11-09",
+      notes: [
+        { department: "FL", kind: "closing", text: "今日樓層打烊要細清（原因略）" },
+        { department: "TC", kind: "closing", text: "打烊細清" },
+        { department: "TC", kind: "remark", text: "簡短事項" },
+      ],
+      rows: [
+        {
+          employee_id: "1321901",
+          nickname: "Peggy",
+          department: "TC",
+          start_time: "09:30",
+          end_time: "18:00",
+          training: { role: "trainer", partner: "Lydia", department: "F", day: 1 },
+        },
+        {
+          employee_id: "1326902",
+          nickname: "Lydia",
+          department: "FL",
+          start_time: "09:30",
+          end_time: "18:00",
+          training: { role: "trainee", department: "F", day: 1 },
+        },
+      ],
+    },
+    {
+      date: "2026-10-22",
+      rows: [
+        { employee_id: "1326902", nickname: "Lydia", department: "TC", start_time: "10:00", end_time: "18:00" },
+        { employee_id: "1324005", nickname: "Jack", department: "TC", start_time: "17:00", end_time: "23:00" },
+      ],
+    },
+  ];
+  const board = roster.formatTodayBoard(days, "2026-11-09", now);
+  assert.match(board, /Training \(T\)\n09:30–18:00  Peggy 帶 Lydia，Floor \(FL\) 第1天/);
+  assert.match(board, /Floor \(FL\)（打烊細清）\n09:30–18:00  Lydia/);
+  assert.doesNotMatch(board, /Ticketing & Candy Bar \(TC\)\n09:30–18:00  Peggy/);
+  assert.match(board, /備註\nTicketing & Candy Bar \(TC\)  簡短事項/);
+  assert.doesNotMatch(board, /原因略/);
+  const extra = roster.formatTodayBoard(days, "2026-10-22", now);
+  assert.match(extra, /Ticketing & Candy Bar \(TC\)\n10:00–18:00  Lydia\n17:00–23:00  Jack/);
+  const lydia = roster.formatReply(roster.collectSchedule(days, "1326902", now));
+  assert.match(lydia, /Floor \(FL\)  09:30–18:00\nPeggy 帶，Floor \(FL\) 第1天/);
+  assert.match(lydia, /Ticketing & Candy Bar \(TC\)  10:00–18:00/);
+  const peggy = roster.formatReply(roster.collectSchedule(days, "1321901", now));
+  assert.match(peggy, /Ticketing & Candy Bar \(TC\)  09:30–18:00\n帶 Lydia，Floor \(FL\) 第1天/);
 });
 
 test("drop choices skip today and keep a later week", () => {

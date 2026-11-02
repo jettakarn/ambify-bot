@@ -59,7 +59,7 @@ function authorize() {
   const file = rosterFolder_().createFile("ambify-bot-auth-check.txt", "ok", MimeType.PLAIN_TEXT);
   file.setTrashed(true);
   ScriptApp.newTrigger("processRosterQueue").timeBased().after(60000).create();
-  deleteMatchingTriggers_("processRosterQueue");
+  ensureRosterQueueTrigger_();
   console.log(`ok model=${config.model}`);
 }
 
@@ -259,7 +259,7 @@ function queueRoster_(event, userId, message) {
     Utilities.newBlob(media.bytes, "application/pdf", `ambify-bot-upload-${userId}.pdf`),
   );
   enqueueRosterJob_(userId, upload.getId());
-  replyOrPush_(event, "收到班表，正在讀整份 PDF。讀完會再傳名單，通常不用一分鐘。");
+  replyOrPush_(event, "收到班表。約一分鐘後開始讀，整個過程至少要 3 到 5 分鐘，讀完會再傳名單。");
 }
 
 function enqueueRosterJob_(userId, pdfFileId) {
@@ -273,7 +273,12 @@ function enqueueRosterJob_(userId, pdfFileId) {
   const queue = JSON.parse(props.getProperty("jobQueue") || "[]");
   queue.push(jobId);
   props.setProperty("jobQueue", JSON.stringify(queue));
-  ScriptApp.newTrigger("processRosterQueue").timeBased().after(1000).create();
+  ensureRosterQueueTrigger_();
+}
+
+function ensureRosterQueueTrigger_() {
+  deleteMatchingTriggers_("processRosterQueue");
+  ScriptApp.newTrigger("processRosterQueue").timeBased().everyMinutes(1).create();
 }
 
 /** Time-driven trigger entry. Do not rename. */
@@ -281,9 +286,9 @@ function processRosterQueue() {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(30000)) return;
   try {
-    deleteMatchingTriggers_("processRosterQueue");
     const props = PropertiesService.getScriptProperties();
     const queue = JSON.parse(props.getProperty("jobQueue") || "[]");
+    if (!queue.length) return;
     props.setProperty("jobQueue", "[]");
     for (let i = 0; i < queue.length; i += 1) {
       processRosterJob_(queue[i]);
@@ -304,6 +309,7 @@ function processRosterJob_(jobId) {
   try {
     file = DriveApp.getFileById(job.pdfFileId);
     const bytes = file.getBlob().getBytes();
+    pushText_(job.userId, "正在讀整份 PDF。");
     pushText_(job.userId, ingestBytes_(job.userId, bytes));
   } catch (error) {
     console.error(error);
@@ -312,12 +318,17 @@ function processRosterJob_(jobId) {
   if (file) file.setTrashed(true);
 }
 
+function rosterHasRows_(document) {
+  return (document.days || []).some((day) => (day.rows || []).length > 0);
+}
+
 function ingestBytes_(userId, bytes) {
   const hash = sha256Hex_(bytes);
   let document = loadRosterByHash_(hash);
-  if (!document) {
+  if (!document || !rosterHasRows_(document)) {
     const extracted = askGemini_(config_(), { bytes, mime: "application/pdf" });
     if (extracted.error) return extracted.error;
+    pushText_(userId, "正在整理班表。");
     document = { days: extracted.days || [], sourceHash: hash };
     saveRosterByHash_(hash, document);
   }
@@ -364,11 +375,16 @@ function askGemini_(config, media) {
     "你在讀國賓影城的掃描班表 PDF，可能有很多頁。",
     "每一頁抽出頁首日期，以及每一列的員工代號、暱稱、開始時間、結束時間、時數、部門。",
     "青色橫條是部門。橫條下面的列都算這個部門，直到下一條橫條。去掉「平日」和「假日」，售票部寫 TC，樓層寫 FL。",
-    "表格外面的手寫不要讀。",
+    "代班人員欄的 (T) 是教學，不是部門。F 是 FL。售票部會直接寫 TC，不會寫成 (T)。",
+    "(T) Lydia F Day1 是訓練：role 為 trainer 或 trainee，department 為 FL，day 為 1，partner 為 Lydia。不要寫進時間或員編。",
+    "點出對方名字的那列 role 寫 trainer。只有 (T) F Day1、沒有對方名字的那列 role 寫 trainee，partner 留空。",
+    "表格下方若寫著員編、暱稱、上下班和 TC 或 FL，當成該頁日期的一列。同一人同一天已有相同上下班就不要再加一列。",
+    "只有樓層會細清。寫到樓層或 FL，而且有打烊或細清，才加一則 notes：department 為 FL，kind 為 closing，text 為打烊細清。括號裡的原因不要。TC 不要做細清。",
+    "其他表格外的事項做成 notes：kind 為 remark，text 寫簡短事項。看得出部門就標 TC 或 FL，看不出就 department 留空。",
     "同一天的多頁合併到同一個 date。",
     "時間用 24 小時制 HH:MM。看不清的格子留空，不要猜。",
     "抽出所有列，不要只留一個人。",
-    "只回 JSON，格式：{\"days\":[{\"date\":\"YYYY-MM-DD\",\"rows\":[{\"employee_id\":\"\",\"nickname\":\"\",\"department\":\"TC\",\"start_time\":\"HH:MM\",\"end_time\":\"HH:MM\",\"hours\":\"HH:MM\"}]}]}",
+    "只回 JSON，格式：{\"days\":[{\"date\":\"YYYY-MM-DD\",\"notes\":[{\"department\":\"FL\",\"kind\":\"closing\",\"text\":\"打烊細清\"}],\"rows\":[{\"employee_id\":\"\",\"nickname\":\"\",\"department\":\"TC\",\"start_time\":\"HH:MM\",\"end_time\":\"HH:MM\",\"hours\":\"HH:MM\",\"training\":null}]}]}",
   ].join("\n");
 
   const models = [config.model].concat(GEMINI_FALLBACKS).filter((name, index, all) => name && all.indexOf(name) === index);

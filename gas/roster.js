@@ -90,8 +90,61 @@ function normalizeDepartment(value) {
   const text = String(value || "").replace(/\s+/g, "");
   if (!text) return "";
   if (text === "TC" || text.indexOf("售票") !== -1) return "TC";
-  if (text === "FL" || text.indexOf("樓層") !== -1) return "FL";
+  if (text === "FL" || text === "F" || text.indexOf("樓層") !== -1) return "FL";
   return "";
+}
+
+function departmentLabel(code) {
+  if (code === "TC") return "Ticketing & Candy Bar (TC)";
+  if (code === "FL") return "Floor (FL)";
+  return "";
+}
+
+function normalizeTraining(value) {
+  if (!value || typeof value !== "object") return null;
+  const role = value.role === "trainer" || value.role === "trainee" ? value.role : "";
+  const department = normalizeDepartment(value.department);
+  const day = Number(value.day);
+  if (!role || !department || !day) return null;
+  return {
+    role,
+    partner: String(value.partner || "").trim(),
+    department,
+    day,
+  };
+}
+
+function linkTraining(days) {
+  (days || []).forEach((day) => {
+    const trainers = [];
+    (day.rows || []).forEach((row) => {
+      const training = normalizeTraining(row.training);
+      if (training) row.training = training;
+      else delete row.training;
+      if (training && training.role === "trainer") trainers.push(row);
+    });
+    (day.rows || []).forEach((row) => {
+      const training = row.training;
+      if (!training || training.role !== "trainee" || training.partner) return;
+      const match = trainers.find((trainer) => (
+        trainer.training.department === training.department && trainer.training.day === training.day
+      ));
+      if (match) training.partner = String(match.nickname || "").trim();
+    });
+  });
+}
+
+function normalizeNote(note) {
+  if (!note || typeof note !== "object") return null;
+  const department = normalizeDepartment(note.department);
+  if (note.kind === "closing") {
+    if (department !== "FL") return null;
+    return { department: "FL", kind: "closing", text: "打烊細清" };
+  }
+  if (note.kind !== "remark") return null;
+  const text = String(note.text || "").trim();
+  if (!text) return null;
+  return { department, kind: "remark", text };
 }
 function inferCrossDay(startTime, endTime) {
   if (!startTime || !endTime) return false;
@@ -120,6 +173,7 @@ function prepareShift(row) {
     employeeId: compactEmployeeId(row.employee_id || row.employeeId),
     nickname: String(row.nickname || "").trim(),
     department: normalizeDepartment(row.department),
+    training: normalizeTraining(row.training),
     startTime,
     endTime,
     hours,
@@ -145,6 +199,7 @@ function selectShifts(rows, employeeId) {
 }
 
 function collectSchedule(days, employeeId, now) {
+  linkTraining(days);
   const resultDays = [];
   let matched = false;
   let nickname = "";
@@ -355,33 +410,98 @@ function formatLeaderboard(days, employeeId, todayIso, now) {
   return lines.join("\n");
 }
 
+function shiftLines(shifts) {
+  const buckets = {};
+  shifts.forEach((shift) => {
+    const key = `${shift.startTime}|${shift.endTime}`;
+    if (!buckets[key]) buckets[key] = [];
+    buckets[key].push(shift.nickname || "未具名");
+  });
+  return Object.keys(buckets).sort().map((key) => {
+    const names = buckets[key].sort((left, right) => left.localeCompare(right));
+    const [startTime, endTime] = key.split("|");
+    return `${startTime}–${endTime}  ${names.join("、")}`;
+  });
+}
+
+function trainerLines(shifts) {
+  const seen = {};
+  return shifts
+    .slice()
+    .sort((left, right) => (
+      left.startTime < right.startTime ? -1
+        : left.startTime > right.startTime ? 1
+          : (left.nickname || "").localeCompare(right.nickname || "")
+    ))
+    .map((shift) => {
+      const training = shift.training;
+      const key = [
+        shift.startTime,
+        shift.endTime,
+        shift.nickname,
+        training.department,
+        training.day,
+        training.partner,
+      ].join("|");
+      if (seen[key]) return "";
+      seen[key] = true;
+      const who = shift.nickname || "未具名";
+      const partner = training.partner || "未具名";
+      return `${shift.startTime}–${shift.endTime}  ${who} 帶 ${partner}，${departmentLabel(training.department)} 第${training.day}天`;
+    })
+    .filter(Boolean);
+}
+
+function remarkLines(notes) {
+  return notes.map((note) => {
+    const label = departmentLabel(note.department);
+    return label ? `${label}  ${note.text}` : note.text;
+  });
+}
+
+function dayNotes(days, todayIso, now) {
+  const notes = [];
+  (days || []).forEach((day) => {
+    if (normalizeDate(day.date, now) !== todayIso) return;
+    (day.notes || []).forEach((note) => {
+      const cleaned = normalizeNote(note);
+      if (cleaned) notes.push(cleaned);
+    });
+  });
+  return notes;
+}
+
+function appendBoardSection(lines, title, items, force) {
+  if (!items.length && !force) return;
+  if (lines[lines.length - 1] !== "") lines.push("");
+  lines.push(title);
+  items.forEach((item) => lines.push(item));
+}
+
 function formatTodayBoard(days, todayIso, now) {
+  linkTraining(days);
   const groups = { TC: [], FL: [], "": [] };
+  const trainers = [];
   eachRosterShift(days, now, (date, shift) => {
     if (date !== todayIso) return;
+    if (shift.training && shift.training.role === "trainer") {
+      trainers.push(shift);
+      return;
+    }
     const department = groups[shift.department] ? shift.department : "";
     groups[department].push(shift);
   }, { includeFullTime: true });
-  const listed = groups.TC.length + groups.FL.length + groups[""].length;
-  if (!listed) return "今天沒有班表。";
+  const notes = dayNotes(days, todayIso, now);
+  const closing = notes.some((note) => note.kind === "closing");
+  const remarks = notes.filter((note) => note.kind === "remark");
+  const listed = trainers.length + groups.TC.length + groups.FL.length + groups[""].length + remarks.length;
+  if (!listed && !closing) return "今天沒有班表。";
   const lines = [formatWhen(todayIso), ""];
-  [["TC", "TC"], ["FL", "FL"], ["", "未分部門"]].forEach((pair) => {
-    const shifts = groups[pair[0]];
-    if (!shifts.length) return;
-    if (lines[lines.length - 1] !== "") lines.push("");
-    lines.push(pair[1]);
-    const buckets = {};
-    shifts.forEach((shift) => {
-      const key = `${shift.startTime}|${shift.endTime}`;
-      if (!buckets[key]) buckets[key] = [];
-      buckets[key].push(shift.nickname || "未具名");
-    });
-    Object.keys(buckets).sort().forEach((key) => {
-      const names = buckets[key].sort((left, right) => left.localeCompare(right));
-      const [startTime, endTime] = key.split("|");
-      lines.push(`${startTime}–${endTime}  ${names.join("、")}`);
-    });
-  });
+  appendBoardSection(lines, "Training (T)", trainerLines(trainers));
+  appendBoardSection(lines, "Ticketing & Candy Bar (TC)", shiftLines(groups.TC));
+  appendBoardSection(lines, closing ? "Floor (FL)（打烊細清）" : "Floor (FL)", shiftLines(groups.FL), closing);
+  appendBoardSection(lines, "未分部門", shiftLines(groups[""]));
+  appendBoardSection(lines, "備註", remarkLines(remarks));
   return lines.join("\n");
 }
 
@@ -426,7 +546,7 @@ function mergeRosterDays(documents, now) {
     (document.days || []).forEach((day) => {
       const date = normalizeDate(day.date, now);
       if (!date) return;
-      byDate[date] = { date, rows: day.rows || [] };
+      byDate[date] = { date, rows: day.rows || [], notes: day.notes || [] };
     });
   });
   return Object.keys(byDate).sort().map((date) => byDate[date]);
@@ -625,8 +745,16 @@ function formatReply(result) {
     if (index > 0) lines.push("");
     lines.push(formatWhen(day.date));
     (day.shifts || []).forEach((shift) => {
-      const place = shift.department ? `${shift.department}  ` : "";
+      const place = shift.department ? `${departmentLabel(shift.department)}  ` : "";
       lines.push(`${place}${shift.startTime}–${shift.endTime}`);
+      if (!shift.training) return;
+      const label = departmentLabel(shift.training.department);
+      const partner = shift.training.partner || "未具名";
+      if (shift.training.role === "trainer") {
+        lines.push(`帶 ${partner}，${label} 第${shift.training.day}天`);
+      } else {
+        lines.push(`${partner} 帶，${label} 第${shift.training.day}天`);
+      }
     });
   });
   if (result.nextWeekNote) {
