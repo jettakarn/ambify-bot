@@ -31,18 +31,18 @@ One official account holds one current roster. An admin uploads the PDF. Everyon
 # Features
 
 - The admin sends a PDF. The bot says it received the file, that reading starts in about a minute, and that the whole process takes at least 3 to 5 minutes. It then says it is reading the PDF and organizing the roster, and finally sends the employee list.
-- Anyone can send an employee number, such as `12345`, and get that person's shifts from today onward, with a blank line between days. Each shift is marked `Ticketing & Candy Bar (TC)` or `Floor (FL)` and shows only the clock times. Training is written under that shift. When next week's roster has not been read, the reply names that Friday–Thursday range and says those days are not listed yet. It may not have been released, or the admin has not updated it, and it comes out on Tuesday at the earliest.
+- Anyone can send an employee number, such as `12345`, and get that person's shifts from today onward, with a blank line between days. Each shift is marked `TC` or `FL` and shows only the clock times. Training under that shift reads `Peggy T Lydia FL Day 1`. When next week's roster has not been read, the reply names that Friday–Thursday range and says those days are not listed yet. It may not have been released, or the admin has not updated it, and it comes out on Tuesday at the earliest.
 - The same PDF bytes are skipped once the saved roster has shifts. A file that saved no rows is read again. A later upload of an earlier week stays out of lookups and drop-shift. Lookups list shifts from today onward. Drop-shift uses the week closest to today, plus the next week when that week is already read, and lists shifts after today. The hours board includes every read week in the current month, names the first and last published day, and leaves other months out.
 - Keep each file under 15MB. When the free Gemini quota runs out, the reply states the reason.
 - A rich menu in the LINE console sends `排行榜`, `丟換班`, and `今日班表`. The bot treats those three strings as the menu.
 
 ### Hours
 
-Hours use the Taipei calendar month. Each shift is its start-to-end length, then minus 0.5 hours when that length is under 9 hours, or 1 hour when it is 9 hours or more. A result below zero counts as zero. A shift that crosses midnight stays in the month it starts, including the minutes after midnight.
+Hours use the Taipei calendar month. Each shift starts from the roster length. A shift of exactly 4 hours has no rest. Any other shift under 9 hours loses 0.5 hours, and a shift of 9 hours or more loses 1 hour. An early shift, starting 09:00–10:59, loses another 0.5 hours when the roster ends at 18:00, because those shifts usually finish at 17:30. A late shift, starting 17:00–19:59, loses another hour when the roster ends at 01:00 or 02:00, because those shifts usually finish at 00:00 or 01:00. A result below zero counts as zero. A shift that crosses midnight stays in the month it starts, including the minutes after midnight. Lookups and drop-shift keep the printed times.
 
 The hours board lists the current Taipei month. Every read week in that month counts. The reply names the first and last published day of that month. Other months stay out. Days that were never read stay out.
 
-Your hours and rank come first. Under that, only the top five names for the month.
+Your hours and rank come first, then the page, such as `第 1/3 頁`. Each page lists 10 names. Previous and next page move through the full ranking.
 
 ### Drop shift
 
@@ -101,11 +101,11 @@ One current roster is shared. Only `ADMIN_LINE_USER_ID` can upload a PDF.
 | Someone else sends a PDF or a photo | The bot asks for an employee number |
 | Add the account, roster already read | The name list, then a prompt for an employee number |
 | Add the account, roster still empty | "班表尚未更新。" |
-| An employee number, such as `12345` | That person's shifts from today onward, with a blank line between days. Each shift is marked `Ticketing & Candy Bar (TC)` or `Floor (FL)` and shows only the clock times. Training is written under that shift. This LINE account is stored against that number. If next week is not read yet, the reply names that week's dates |
+| An employee number, such as `12345` | That person's shifts from today onward, with a blank line between days. Each shift is marked `TC` or `FL` and shows only the clock times. Training under that shift reads `Peggy T Lydia FL Day 1`. This LINE account is stored against that number. If next week is not read yet, the reply names that week's dates |
 | `班表`, or any text that is not a number | The name list again |
-| `排行榜` | Your rank and hours for the current month, then the top five |
+| `排行榜` | Your rank and hours for the current month, then 10 people per page, with previous and next page |
 | `丟換班` | Who can take one of your shifts after today |
-| `今日班表` | Training (T), then Ticketing & Candy Bar (TC), then Floor (FL). People on the same hours share a line. Floor (FL) may be marked（打烊細清）. Other notes are listed under 備註. Full-time staff are included |
+| `今日班表` | T, then TC, then FL. People on the same hours share a line. Trainers are listed as `Peggy T Lydia FL Day 1`. FL may be marked（打烊細清）. Other notes are listed under 備註. Full-time staff are included |
 | The same PDF again | The stored roster is reused |
 
 Set the bottom menu in the LINE console. The buttons send the text `排行榜`, `丟換班`, and `今日班表`.

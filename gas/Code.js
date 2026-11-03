@@ -165,13 +165,14 @@ function handleMenu_(event, userId, data) {
     return;
   }
 
-  if (data === "hours") {
+  if (data === "hours" || data.indexOf("hours|") === 0) {
     const monthRoster = loadMergedRoster_();
     if (!monthRoster) {
       sendText_(event, NOT_UPDATED);
       return;
     }
-    sendText_(event, formatLeaderboard(monthRoster.days, employeeId, today, now));
+    const requested = data === "hours" ? 1 : Number(data.slice("hours|".length));
+    sendLeaderboard_(event, monthRoster.days, employeeId, today, now, requested);
     return;
   }
   if (data === "drop") {
@@ -191,6 +192,26 @@ function handleMenu_(event, userId, data) {
     return;
   }
   sendText_(event, "請再點一次底部選單。");
+}
+
+function sendLeaderboard_(event, days, employeeId, today, now, page) {
+  const board = formatLeaderboard(days, employeeId, today, now, page);
+  const items = [];
+  if (board.page > 1) items.push(leaderboardPage_(board.page - 1, "上一頁"));
+  if (board.pages > board.page) items.push(leaderboardPage_(board.page + 1, "下一頁"));
+  sendMessage_(event, board.text, items);
+}
+
+function leaderboardPage_(page, label) {
+  return {
+    type: "action",
+    action: {
+      type: "postback",
+      label,
+      data: `hours|${page}`,
+      displayText: label,
+    },
+  };
 }
 
 function sendDropChoices_(event, roster, employeeId, today, now) {

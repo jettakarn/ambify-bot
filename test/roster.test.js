@@ -118,9 +118,19 @@ test("unknown id asks again with the name list", () => {
   assert.match(text, /請輸入員工編號。/);
 });
 
+test("four-hour shifts keep their hours and early or late endings use the usual finish", () => {
+  assert.equal(roster.shiftPaidMinutes("2026-10-01", "14:00", "18:00", false), 4 * 60);
+  assert.equal(roster.shiftPaidMinutes("2026-10-01", "09:00", "13:00", false), 4 * 60);
+  assert.equal(roster.shiftPaidMinutes("2026-10-01", "09:00", "18:00", false), 7.5 * 60);
+  assert.equal(roster.shiftPaidMinutes("2026-10-01", "10:00", "18:00", false), 7 * 60);
+  assert.equal(roster.shiftPaidMinutes("2026-10-01", "12:00", "18:00", false), 5.5 * 60);
+  assert.equal(roster.shiftPaidMinutes("2026-10-01", "18:00", "02:00", true), 6.5 * 60);
+  assert.equal(roster.shiftPaidMinutes("2026-10-01", "17:00", "23:00", false), 5.5 * 60);
+});
+
 test("overnight shift stays in the month it starts", () => {
-  assert.equal(roster.shiftPaidMinutes("2026-09-30", "18:00", "01:00", true), 390);
-  assert.equal(roster.shiftPaidMinutes("2026-09-30", "18:00", "01:00", true, 2026, 9), 390);
+  assert.equal(roster.shiftPaidMinutes("2026-09-30", "18:00", "01:00", true), 330);
+  assert.equal(roster.shiftPaidMinutes("2026-09-30", "18:00", "01:00", true, 2026, 9), 330);
   assert.equal(roster.shiftPaidMinutes("2026-09-30", "18:00", "01:00", true, 2026, 10), 0);
   assert.equal(roster.shiftPaidMinutes("2026-10-01", "09:00", "09:20", false), 0);
   assert.equal(roster.shiftPaidMinutes("2026-10-01", "09:00", "19:00", false), 9 * 60);
@@ -129,11 +139,11 @@ test("overnight shift stays in the month it starts", () => {
     { date: "2026-09-30", rows: [{ employee_id: "10001", nickname: "甲", start_time: "18:00", end_time: "01:00" }] },
     { date: "2026-10-01", rows: [{ employee_id: "10002", nickname: "乙", start_time: "09:00", end_time: "18:00" }] },
   ];
-  const october = roster.formatLeaderboard(days, "10002", "2026-10-13", now);
-  assert.match(october, /本月 8 小時/);
+  const october = roster.formatLeaderboard(days, "10002", "2026-10-13", now).text;
+  assert.match(october, /本月 7.5 小時/);
   assert.doesNotMatch(october, /10001/);
   const september = roster.monthHours(days, 2026, 9, now);
-  assert.equal(september.people.find((person) => person.employeeId === "10001").minutes, 390);
+  assert.equal(september.people.find((person) => person.employeeId === "10001").minutes, 330);
 });
 
 test("leaderboard totals published days in the month without the 1st", () => {
@@ -141,8 +151,8 @@ test("leaderboard totals published days in the month without the 1st", () => {
   const board = roster.monthHours(SAMPLE_DAYS, 2026, 10, now);
   assert.equal(board.ready, true);
   assert.equal(board.through, "2026-10-07");
-  const text = roster.formatLeaderboard(SAMPLE_DAYS, "12345", "2026-10-06", now);
-  assert.match(text, /本月 14.5 小時/);
+  const text = roster.formatLeaderboard(SAMPLE_DAYS, "12345", "2026-10-06", now).text;
+  assert.match(text, /本月 13 小時/);
   assert.match(text, /統計區間 10\/6–10\/7/);
   assert.equal(
     roster.formatLeaderboard(
@@ -150,31 +160,43 @@ test("leaderboard totals published days in the month without the 1st", () => {
       "12345",
       "2026-10-06",
       now,
-    ),
+    ).text,
     "班表尚未更新。",
   );
 });
 
-test("leaderboard shows personal rank and only the top five", () => {
+test("leaderboard lists ten people per page", () => {
   const days = [
     {
       date: "2026-10-01",
-      rows: [1, 2, 3, 4, 5, 6].map((n) => ({
-        employee_id: `1000${n}`,
-        nickname: `人${n}`,
-        start_time: "09:00",
-        end_time: `${String(9 + n).padStart(2, "0")}:00`,
-        hours: `0${n}:00`,
-      })),
+      rows: Array.from({ length: 12 }, (_, index) => {
+        const n = index + 1;
+        return {
+          employee_id: String(10000 + n),
+          nickname: `人${n}`,
+          start_time: "09:00",
+          end_time: `${String(9 + n).padStart(2, "0")}:00`,
+        };
+      }),
     },
   ];
-  const text = roster.formatLeaderboard(days, "10001", "2026-10-13", new Date("2026-01-01T00:00:00Z"));
-  assert.match(text, /你是第 6 名，本月 0.5 小時。/);
-  assert.match(text, /統計區間 10\/1–10\/1。/);
-  assert.match(text, /1\. 人6 5.5 小時/);
-  assert.match(text, /5\. 人2 1.5 小時/);
-  assert.doesNotMatch(text, /10006/);
-  assert.doesNotMatch(text, /10001/);
+  const now = new Date("2026-01-01T00:00:00Z");
+  const first = roster.formatLeaderboard(days, "10001", "2026-10-13", now, 1);
+  assert.equal(first.page, 1);
+  assert.equal(first.pages, 2);
+  assert.match(first.text, /你是第 12 名，本月 0.5 小時。/);
+  assert.match(first.text, /統計區間 10\/1–10\/1。/);
+  assert.match(first.text, /第 1\/2 頁/);
+  assert.match(first.text, /1\. 人12 11 小時/);
+  assert.match(first.text, /10\. 人3 2.5 小時/);
+  assert.doesNotMatch(first.text, /11\. 人2/);
+  assert.doesNotMatch(first.text, /10012/);
+  const second = roster.formatLeaderboard(days, "10001", "2026-10-13", now, 5);
+  assert.equal(second.page, 2);
+  assert.match(second.text, /第 2\/2 頁/);
+  assert.match(second.text, /11\. 人2 1.5 小時/);
+  assert.match(second.text, /12\. 人1 0.5 小時/);
+  assert.doesNotMatch(second.text, /1\. 人12/);
 });
 
 test("week range is Friday through Thursday", () => {
@@ -238,13 +260,13 @@ test("merged weeks total October once the 1st is present and a later day wins", 
     ] },
   ], now);
   assert.equal(days.find((day) => day.date === "2026-10-01").rows[0].start_time, "10:00");
-  const text = roster.formatLeaderboard(days, "10001", "2026-10-13", now);
-  assert.match(text, /本月 15.5 小時/);
+  const text = roster.formatLeaderboard(days, "10001", "2026-10-13", now).text;
+  assert.match(text, /本月 14.5 小時/);
   assert.match(text, /統計區間 10\/1–10\/16/);
   const onlyLater = roster.mergeRosterDays([
     { days: [{ date: "2026-10-16", rows: [{ employee_id: "10001", nickname: "甲", start_time: "09:00", end_time: "18:00" }] }] },
   ], now);
-  assert.match(roster.formatLeaderboard(onlyLater, "10001", "2026-10-13", now), /本月 8 小時/);
+  assert.match(roster.formatLeaderboard(onlyLater, "10001", "2026-10-13", now).text, /本月 7.5 小時/);
 });
 
 test("three-digit staff ids stay out of lookup, the name list, hours, and drop shift", () => {
@@ -270,7 +292,7 @@ test("three-digit staff ids stay out of lookup, the name list, hours, and drop s
   const text = roster.formatReply({ ...selected, rosterDays: days, now });
   assert.match(text, /找不到這個員工編號。/);
   assert.doesNotMatch(text, /211/);
-  assert.doesNotMatch(roster.formatLeaderboard(days, "12345", "2026-10-13", now), /211/);
+  assert.doesNotMatch(roster.formatLeaderboard(days, "12345", "2026-10-13", now).text, /211/);
   const people = roster.dropCandidates(
     days,
     "12345",
@@ -415,8 +437,8 @@ test("leaderboard keeps the current month and leaves other months out", () => {
       ],
     },
   ];
-  const text = roster.formatLeaderboard(days, "10001", "2026-10-13", now);
-  assert.match(text, /本月 16 小時/);
+  const text = roster.formatLeaderboard(days, "10001", "2026-10-13", now).text;
+  assert.match(text, /本月 15 小時/);
   assert.match(text, /統計區間 10\/2–10\/16/);
   assert.doesNotMatch(text, /10002/);
   assert.doesNotMatch(text, /10003/);
@@ -475,7 +497,7 @@ test("lookup shows TC or FL on each shift", () => {
     },
   ];
   const text = roster.formatReply(roster.collectSchedule(days, "1326902", now));
-  assert.match(text, /1326902 Lydia\n\n10\/16（五）\nTicketing & Candy Bar \(TC\)  09:00–18:00\n\n10\/17（六）\nFloor \(FL\)  18:00–01:00/);
+  assert.match(text, /1326902 Lydia\n\n10\/16（五）\nTC  09:00–18:00\n\n10\/17（六）\nFL  18:00–01:00/);
   assert.doesNotMatch(text, /跨日/);
   assert.doesNotMatch(text, /07:00/);
 });
@@ -519,10 +541,10 @@ test("today board lists TC then FL without employee ids", () => {
     },
   ];
   const text = roster.formatTodayBoard(days, "2026-10-16", now);
-  assert.match(text, /10\/16（五）\n\nTicketing & Candy Bar \(TC\)\n/);
-  const tc = text.split("\nFloor (FL)\n")[0];
+  assert.match(text, /10\/16（五）\n\nTC\n/);
+  const tc = text.split("\nFL\n")[0];
   assert.match(tc, /09:00–18:00  (?:正職、Lydia|Lydia、正職)/);
-  assert.match(text, /Floor \(FL\)\n09:00–18:00  Ben\n09:30–18:00  Peggy/);
+  assert.match(text, /FL\n09:00–18:00  Ben\n09:30–18:00  Peggy/);
   assert.match(text, /未分部門\n17:00–23:00  未具名/);
   assert.doesNotMatch(text, /211/);
   assert.doesNotMatch(text, /1326902/);
@@ -567,18 +589,19 @@ test("today board lists trainers, floor closing, remarks, and handwritten shifts
     },
   ];
   const board = roster.formatTodayBoard(days, "2026-11-09", now);
-  assert.match(board, /Training \(T\)\n09:30–18:00  Peggy 帶 Lydia，Floor \(FL\) 第1天/);
-  assert.match(board, /Floor \(FL\)（打烊細清）\n09:30–18:00  Lydia/);
-  assert.doesNotMatch(board, /Ticketing & Candy Bar \(TC\)\n09:30–18:00  Peggy/);
-  assert.match(board, /備註\nTicketing & Candy Bar \(TC\)  簡短事項/);
+  assert.match(board, /T\n09:30–18:00  Peggy T Lydia FL Day 1/);
+  assert.match(board, /FL（打烊細清）\n09:30–18:00  Lydia/);
+  assert.doesNotMatch(board, /TC\n09:30–18:00  Peggy/);
+  assert.match(board, /備註\n簡短事項/);
+  assert.doesNotMatch(board, /備註\nTC/);
   assert.doesNotMatch(board, /原因略/);
   const extra = roster.formatTodayBoard(days, "2026-10-22", now);
-  assert.match(extra, /Ticketing & Candy Bar \(TC\)\n10:00–18:00  Lydia\n17:00–23:00  Jack/);
+  assert.match(extra, /TC\n10:00–18:00  Lydia\n17:00–23:00  Jack/);
   const lydia = roster.formatReply(roster.collectSchedule(days, "1326902", now));
-  assert.match(lydia, /Floor \(FL\)  09:30–18:00\nPeggy 帶，Floor \(FL\) 第1天/);
-  assert.match(lydia, /Ticketing & Candy Bar \(TC\)  10:00–18:00/);
+  assert.match(lydia, /FL  09:30–18:00\nPeggy T Lydia FL Day 1/);
+  assert.match(lydia, /TC  10:00–18:00/);
   const peggy = roster.formatReply(roster.collectSchedule(days, "1321901", now));
-  assert.match(peggy, /Ticketing & Candy Bar \(TC\)  09:30–18:00\n帶 Lydia，Floor \(FL\) 第1天/);
+  assert.match(peggy, /TC  09:30–18:00\nPeggy T Lydia FL Day 1/);
 });
 
 test("drop choices skip today and keep a later week", () => {

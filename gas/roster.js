@@ -94,12 +94,6 @@ function normalizeDepartment(value) {
   return "";
 }
 
-function departmentLabel(code) {
-  if (code === "TC") return "Ticketing & Candy Bar (TC)";
-  if (code === "FL") return "Floor (FL)";
-  return "";
-}
-
 function normalizeTraining(value) {
   if (!value || typeof value !== "object") return null;
   const role = value.role === "trainer" || value.role === "trainee" ? value.role : "";
@@ -305,10 +299,23 @@ function overlaps(left, right) {
   return left.start < right.end && right.start < left.end;
 }
 
+function restMinutes(clockMinutes) {
+  if (clockMinutes === 4 * 60) return 0;
+  return clockMinutes >= 9 * 60 ? 60 : 30;
+}
+
+function leaveEarlyMinutes(startTime, endTime) {
+  const end = normalizeTime(endTime);
+  const kind = shiftKind(startTime);
+  if (kind === "early" && end === "18:00") return 30;
+  if (kind === "late" && (end === "01:00" || end === "02:00")) return 60;
+  return 0;
+}
+
 function paidInterval(date, startTime, endTime, crossDay) {
   const span = intervalOf(date, startTime, endTime, crossDay);
-  const rest = durationMinutes(startTime, endTime, crossDay) >= 9 * 60 ? 60 : 30;
-  const start = span.start + rest * 60 * 1000;
+  const clock = durationMinutes(startTime, endTime, crossDay);
+  const start = span.start + (restMinutes(clock) + leaveEarlyMinutes(startTime, endTime)) * 60 * 1000;
   if (start >= span.end) return null;
   return { start, end: span.end };
 }
@@ -392,22 +399,25 @@ function formatHourValue(minutes) {
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
 }
 
-function formatLeaderboard(days, employeeId, todayIso, now) {
+function formatLeaderboard(days, employeeId, todayIso, now, page) {
   const today = new Date(`${todayIso}T00:00:00Z`);
   const board = monthHours(days, today.getUTCFullYear(), today.getUTCMonth() + 1, now);
-  if (!board.ready) return "班表尚未更新。";
+  if (!board.ready) return { text: "班表尚未更新。", page: 1, pages: 0 };
   const wanted = compactEmployeeId(employeeId);
   const rank = board.people.findIndex((person) => person.employeeId === wanted);
   const mine = rank === -1 ? { minutes: 0 } : board.people[rank];
+  const pages = Math.max(1, Math.ceil(board.people.length / 10));
+  const current = Math.min(pages, Math.max(1, Math.floor(Number(page)) || 1));
   const lines = [
     `你是第 ${rank === -1 ? board.people.length + 1 : rank + 1} 名，本月 ${formatHourValue(mine.minutes)} 小時。`,
     `統計區間 ${shortDate(board.from)}–${shortDate(board.through)}。`,
+    `第 ${current}/${pages} 頁`,
   ];
-  board.people.slice(0, 5).forEach((person, index) => {
+  board.people.slice((current - 1) * 10, current * 10).forEach((person, index) => {
     const name = person.nickname || "未具名";
-    lines.push(`${index + 1}. ${name} ${formatHourValue(person.minutes)} 小時`);
+    lines.push(`${(current - 1) * 10 + index + 1}. ${name} ${formatHourValue(person.minutes)} 小時`);
   });
-  return lines.join("\n");
+  return { text: lines.join("\n"), page: current, pages };
 }
 
 function shiftLines(shifts) {
@@ -422,6 +432,15 @@ function shiftLines(shifts) {
     const [startTime, endTime] = key.split("|");
     return `${startTime}–${endTime}  ${names.join("、")}`;
   });
+}
+
+function trainingPhrase(shift) {
+  const training = shift.training;
+  const nickname = shift.nickname || "未具名";
+  const partner = training.partner || "未具名";
+  const trainer = training.role === "trainer" ? nickname : partner;
+  const trainee = training.role === "trainer" ? partner : nickname;
+  return `${trainer} T ${trainee} ${training.department} Day ${training.day}`;
 }
 
 function trainerLines(shifts) {
@@ -445,18 +464,13 @@ function trainerLines(shifts) {
       ].join("|");
       if (seen[key]) return "";
       seen[key] = true;
-      const who = shift.nickname || "未具名";
-      const partner = training.partner || "未具名";
-      return `${shift.startTime}–${shift.endTime}  ${who} 帶 ${partner}，${departmentLabel(training.department)} 第${training.day}天`;
+      return `${shift.startTime}–${shift.endTime}  ${trainingPhrase(shift)}`;
     })
     .filter(Boolean);
 }
 
 function remarkLines(notes) {
-  return notes.map((note) => {
-    const label = departmentLabel(note.department);
-    return label ? `${label}  ${note.text}` : note.text;
-  });
+  return notes.map((note) => note.text);
 }
 
 function dayNotes(days, todayIso, now) {
@@ -497,9 +511,9 @@ function formatTodayBoard(days, todayIso, now) {
   const listed = trainers.length + groups.TC.length + groups.FL.length + groups[""].length + remarks.length;
   if (!listed && !closing) return "今天沒有班表。";
   const lines = [formatWhen(todayIso), ""];
-  appendBoardSection(lines, "Training (T)", trainerLines(trainers));
-  appendBoardSection(lines, "Ticketing & Candy Bar (TC)", shiftLines(groups.TC));
-  appendBoardSection(lines, closing ? "Floor (FL)（打烊細清）" : "Floor (FL)", shiftLines(groups.FL), closing);
+  appendBoardSection(lines, "T", trainerLines(trainers));
+  appendBoardSection(lines, "TC", shiftLines(groups.TC));
+  appendBoardSection(lines, closing ? "FL（打烊細清）" : "FL", shiftLines(groups.FL), closing);
   appendBoardSection(lines, "未分部門", shiftLines(groups[""]));
   appendBoardSection(lines, "備註", remarkLines(remarks));
   return lines.join("\n");
@@ -745,16 +759,9 @@ function formatReply(result) {
     if (index > 0) lines.push("");
     lines.push(formatWhen(day.date));
     (day.shifts || []).forEach((shift) => {
-      const place = shift.department ? `${departmentLabel(shift.department)}  ` : "";
+      const place = shift.department ? `${shift.department}  ` : "";
       lines.push(`${place}${shift.startTime}–${shift.endTime}`);
-      if (!shift.training) return;
-      const label = departmentLabel(shift.training.department);
-      const partner = shift.training.partner || "未具名";
-      if (shift.training.role === "trainer") {
-        lines.push(`帶 ${partner}，${label} 第${shift.training.day}天`);
-      } else {
-        lines.push(`${partner} 帶，${label} 第${shift.training.day}天`);
-      }
+      if (shift.training) lines.push(trainingPhrase(shift));
     });
   });
   if (result.nextWeekNote) {
