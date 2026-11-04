@@ -112,34 +112,66 @@ function handleText_(userId, text) {
   const roster = loadLookupRoster_();
   const now = queryNow_();
   if (!roster) return NOT_UPDATED;
-  if (trimmed === "班表" || !looksLikeEmployeeId(trimmed)) {
+  if (trimmed === "班表") {
     return formatRosterSummary(roster.days, now);
   }
 
   const today = taipeiToday_();
-  const selected = collectSchedule(roster.days, trimmed, now);
-  const upcoming = scheduleFromToday(selected, today);
-  const reply = formatReply({
-    nickname: selected.nickname,
-    employeeId: selected.employeeId,
-    days: upcoming.days,
-    matched: selected.matched,
-    hadShifts: selected.days.length > 0,
-    nextWeekNote: selected.matched && !nextWeekPublished(roster.days, today, now),
-    today,
-    rosterDays: roster.days,
-    now,
-  });
-  if (selected.matched) {
-    userProps_(userId).setProperty("employeeId", selected.employeeId);
+
+  const targetDate = parseDateQuery(trimmed, today, now);
+  if (targetDate) {
+    return formatDayBoard(roster.days, targetDate, now, { todayIso: today });
   }
-  return reply;
+
+  if (looksLikeEmployeeId(trimmed)) {
+    const selected = collectSchedule(roster.days, trimmed, now);
+    const upcoming = scheduleFromToday(selected, today);
+    const reply = formatReply({
+      nickname: selected.nickname,
+      employeeId: selected.employeeId,
+      days: upcoming.days,
+      matched: selected.matched,
+      hadShifts: selected.days.length > 0,
+      nextWeekNote: selected.matched && !nextWeekPublished(roster.days, today, now),
+      today,
+      rosterDays: roster.days,
+      now,
+    });
+    if (selected.matched) {
+      userProps_(userId).setProperty("employeeId", selected.employeeId);
+    }
+    return reply;
+  }
+
+  const matchedPeople = findEmployeesByNickname(roster.days, trimmed);
+  if (matchedPeople.length === 1) {
+    const person = matchedPeople[0];
+    const selected = collectSchedule(roster.days, person.employeeId, now);
+    const upcoming = scheduleFromToday(selected, today);
+    return formatReply({
+      nickname: selected.nickname,
+      employeeId: selected.employeeId,
+      days: upcoming.days,
+      matched: selected.matched,
+      hadShifts: selected.days.length > 0,
+      nextWeekNote: selected.matched && !nextWeekPublished(roster.days, today, now),
+      today,
+      rosterDays: roster.days,
+      now,
+    });
+  }
+  if (matchedPeople.length > 1) {
+    return formatMultipleEmployees(matchedPeople);
+  }
+
+  return formatRosterSummary(roster.days, now);
 }
 
 function menuAction_(text) {
   if (text === "排行榜" || text === "工作時數排行榜") return "hours";
   if (text === "丟換班" || text === "丟換班查詢") return "drop";
-  if (text === "今日班表") return "today";
+  if (text === "今日班表" || text === "今天" || text === "今天班表" || text === "今天的班表") return "today";
+  if (text === "明天" || text === "明天班表" || text === "明天的班表") return "tomorrow";
   return "";
 }
 
@@ -156,7 +188,12 @@ function handleMenu_(event, userId, data) {
   const now = queryNow_();
   const today = taipeiToday_();
   if (data === "today") {
-    sendText_(event, formatTodayBoard(roster.days, today, now));
+    sendDayBoard_(event, roster.days, today, now, today);
+    return;
+  }
+  if (data === "tomorrow") {
+    const tomorrow = addIsoDays(today, 1);
+    sendDayBoard_(event, roster.days, tomorrow, now, today);
     return;
   }
   const employeeId = userProps_(userId).getProperty("employeeId");
@@ -192,6 +229,29 @@ function handleMenu_(event, userId, data) {
     return;
   }
   sendText_(event, "請再點一次底部選單。");
+}
+
+function sendDayBoard_(event, days, targetIso, now, todayIso) {
+  const text = formatDayBoard(days, targetIso, now, { todayIso });
+  const items = [];
+  if (targetIso === todayIso) {
+    items.push(dayBoardAction_("tomorrow", "看明天班表"));
+  } else {
+    items.push(dayBoardAction_("today", "看今日班表"));
+  }
+  sendMessage_(event, text, items);
+}
+
+function dayBoardAction_(data, label) {
+  return {
+    type: "action",
+    action: {
+      type: "postback",
+      label,
+      data,
+      displayText: label,
+    },
+  };
 }
 
 function sendLeaderboard_(event, days, employeeId, today, now, page) {

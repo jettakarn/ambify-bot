@@ -613,3 +613,99 @@ test("drop choices skip today and keep a later week", () => {
   const shifts = roster.shiftsAfter(days, "10001", "2026-10-13", new Date("2026-01-01T00:00:00Z"));
   assert.deepEqual(shifts.map((shift) => shift.date), ["2026-10-16"]);
 });
+
+test("formatDayBoard shows department shifts for specified date and handles empty state", () => {
+  const now = new Date("2026-01-01T00:00:00Z");
+  const days = [
+    {
+      date: "2026-10-16",
+      rows: [
+        { employee_id: "1326902", nickname: "Lydia", department: "TC", start_time: "09:00", end_time: "18:00" },
+      ],
+    },
+  ];
+  const board16 = roster.formatDayBoard(days, "2026-10-16", now, { todayIso: "2026-10-15" });
+  assert.match(board16, /10\/16（五）\n\nTC\n09:00–18:00  Lydia/);
+
+  // Today empty vs other day empty
+  const todayEmpty = roster.formatDayBoard(days, "2026-10-15", now, { todayIso: "2026-10-15" });
+  assert.equal(todayEmpty, "今天沒有班表。");
+
+  const otherEmpty = roster.formatDayBoard(days, "2026-10-17", now, { todayIso: "2026-10-15" });
+  assert.equal(otherEmpty, "10/17（六）\n\n這天沒有班表。");
+});
+
+test("parseDateQuery parses relative keywords and specific dates without confusing employee IDs", () => {
+  const now = new Date("2026-01-01T00:00:00Z");
+  const today = "2026-10-15";
+
+  // Relative keywords
+  assert.equal(roster.parseDateQuery("今天", today, now), "2026-10-15");
+  assert.equal(roster.parseDateQuery("今日班表", today, now), "2026-10-15");
+  assert.equal(roster.parseDateQuery("明天", today, now), "2026-10-16");
+  assert.equal(roster.parseDateQuery("明天班表", today, now), "2026-10-16");
+  assert.equal(roster.parseDateQuery("明天的班表", today, now), "2026-10-16");
+  assert.equal(roster.parseDateQuery("看明天班", today, now), "2026-10-16");
+  assert.equal(roster.parseDateQuery("後天", today, now), "2026-10-17");
+  assert.equal(roster.parseDateQuery("昨天", today, now), "2026-10-14");
+
+  // Specific dates
+  assert.equal(roster.parseDateQuery("10/16", today, now), "2026-10-16");
+  assert.equal(roster.parseDateQuery("10-16", today, now), "2026-10-16");
+  assert.equal(roster.parseDateQuery("10月16日", today, now), "2026-10-16");
+  assert.equal(roster.parseDateQuery("10月16號班表", today, now), "2026-10-16");
+  assert.equal(roster.parseDateQuery("2026/10/16", today, now), "2026-10-16");
+  assert.equal(roster.parseDateQuery("2026-10-16班表", today, now), "2026-10-16");
+
+  // Year rollover (December -> January)
+  assert.equal(roster.parseDateQuery("1/5", "2026-12-28", now), "2027-01-05");
+
+  // Non-date strings
+  assert.equal(roster.parseDateQuery("12345", today, now), null);
+  assert.equal(roster.parseDateQuery("班表", today, now), null);
+  assert.equal(roster.parseDateQuery("Peggy", today, now), null);
+  assert.equal(roster.parseDateQuery("99/99", today, now), null);
+});
+
+test("findEmployeesByNickname matches exact and substring, excluding 3-digit full-timers", () => {
+  const days = [
+    {
+      date: "2026-10-16",
+      rows: [
+        { employee_id: "211", nickname: "正職主管", department: "TC", start_time: "09:00", end_time: "18:00" },
+        { employee_id: "1321901", nickname: "Peggy", department: "TC", start_time: "09:30", end_time: "18:00" },
+        { employee_id: "1326902", nickname: "Lydia", department: "FL", start_time: "09:30", end_time: "18:00" },
+        { employee_id: "1328001", nickname: "Peggy Chen", department: "FL", start_time: "12:00", end_time: "20:00" },
+      ],
+    },
+  ];
+
+  // Full-time 3-digit excluded
+  assert.deepEqual(roster.findEmployeesByNickname(days, "正職主管"), []);
+
+  // Exact match (case insensitive)
+  const peggyExact = roster.findEmployeesByNickname(days, "peggy");
+  assert.equal(peggyExact.length, 1);
+  assert.equal(peggyExact[0].employeeId, "1321901");
+
+  // Substring match
+  const lydiaSub = roster.findEmployeesByNickname(days, "lyd");
+  assert.equal(lydiaSub.length, 1);
+  assert.equal(lydiaSub[0].employeeId, "1326902");
+
+  // Multiple substring matches
+  const chen = roster.findEmployeesByNickname(days, "chen");
+  assert.equal(chen.length, 1);
+  assert.equal(chen[0].employeeId, "1328001");
+
+  // Ambiguous match format
+  const multiple = [
+    { employeeId: "1321901", nickname: "Peggy" },
+    { employeeId: "1328001", nickname: "Peggy Chen" },
+  ];
+  const disambiguation = roster.formatMultipleEmployees(multiple);
+  assert.match(disambiguation, /找到多位符合的員工：/);
+  assert.match(disambiguation, /1321901 Peggy/);
+  assert.match(disambiguation, /1328001 Peggy Chen/);
+  assert.match(disambiguation, /請輸入員工編號查詢。/);
+});

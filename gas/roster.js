@@ -492,12 +492,12 @@ function appendBoardSection(lines, title, items, force) {
   items.forEach((item) => lines.push(item));
 }
 
-function formatTodayBoard(days, todayIso, now) {
+function formatDayBoard(days, targetIso, now, options) {
   linkTraining(days);
   const groups = { TC: [], FL: [], "": [] };
   const trainers = [];
   eachRosterShift(days, now, (date, shift) => {
-    if (date !== todayIso) return;
+    if (date !== targetIso) return;
     if (shift.training && shift.training.role === "trainer") {
       trainers.push(shift);
       return;
@@ -505,17 +505,93 @@ function formatTodayBoard(days, todayIso, now) {
     const department = groups[shift.department] ? shift.department : "";
     groups[department].push(shift);
   }, { includeFullTime: true });
-  const notes = dayNotes(days, todayIso, now);
+  const notes = dayNotes(days, targetIso, now);
   const closing = notes.some((note) => note.kind === "closing");
   const remarks = notes.filter((note) => note.kind === "remark");
   const listed = trainers.length + groups.TC.length + groups.FL.length + groups[""].length + remarks.length;
-  if (!listed && !closing) return "今天沒有班表。";
-  const lines = [formatWhen(todayIso), ""];
+  if (!listed && !closing) {
+    if (options && options.todayIso && targetIso === options.todayIso) {
+      return "今天沒有班表。";
+    }
+    return `${formatWhen(targetIso)}\n\n這天沒有班表。`;
+  }
+  const lines = [formatWhen(targetIso), ""];
   appendBoardSection(lines, "T", trainerLines(trainers));
   appendBoardSection(lines, "TC", shiftLines(groups.TC));
   appendBoardSection(lines, closing ? "FL（打烊細清）" : "FL", shiftLines(groups.FL), closing);
   appendBoardSection(lines, "未分部門", shiftLines(groups[""]));
   appendBoardSection(lines, "備註", remarkLines(remarks));
+  return lines.join("\n");
+}
+
+function formatTodayBoard(days, todayIso, now) {
+  return formatDayBoard(days, todayIso, now, { todayIso });
+}
+
+function parseDateQuery(text, todayIso, now) {
+  if (!text) return null;
+  const raw = String(text).trim();
+  if (looksLikeEmployeeId(raw)) return null;
+
+  let cleaned = raw
+    .replace(/^看\s*/, "")
+    .replace(/\s*(?:的?班表|班)$/, "")
+    .trim();
+  if (!cleaned) return null;
+
+  if (cleaned === "今天" || cleaned === "今日") return todayIso;
+  if (cleaned === "明天" || cleaned === "明日") return addIsoDays(todayIso, 1);
+  if (cleaned === "後天") return addIsoDays(todayIso, 2);
+  if (cleaned === "大後天") return addIsoDays(todayIso, 3);
+  if (cleaned === "昨天" || cleaned === "昨日") return addIsoDays(todayIso, -1);
+  if (cleaned === "前天") return addIsoDays(todayIso, -2);
+
+  let match = cleaned.match(/^(\d{4})\s*[/\-.年]\s*(\d{1,2})\s*[/\-.月]\s*(\d{1,2})\s*[日號]?$/);
+  if (match) {
+    return isoDate(match[1], match[2], match[3]);
+  }
+
+  match = cleaned.match(/^(\d{1,2})\s*[/\-.]\s*(\d{1,2})$/);
+  if (match) {
+    let year = todayIso ? Number(todayIso.slice(0, 4)) : (now || new Date()).getFullYear();
+    const currentMonth = todayIso ? Number(todayIso.slice(5, 7)) : (now || new Date()).getMonth() + 1;
+    const targetMonth = Number(match[1]);
+    if (currentMonth === 12 && targetMonth === 1) year += 1;
+    else if (currentMonth === 1 && targetMonth === 12) year -= 1;
+    return isoDate(year, match[1], match[2]);
+  }
+
+  match = cleaned.match(/^(\d{1,2})\s*月\s*(\d{1,2})\s*[日號]?$/);
+  if (match) {
+    let year = todayIso ? Number(todayIso.slice(0, 4)) : (now || new Date()).getFullYear();
+    const currentMonth = todayIso ? Number(todayIso.slice(5, 7)) : (now || new Date()).getMonth() + 1;
+    const targetMonth = Number(match[1]);
+    if (currentMonth === 12 && targetMonth === 1) year += 1;
+    else if (currentMonth === 1 && targetMonth === 12) year -= 1;
+    return isoDate(year, match[1], match[2]);
+  }
+
+  return null;
+}
+
+function findEmployeesByNickname(days, query) {
+  const cleaned = String(query || "").trim().toLowerCase();
+  if (!cleaned) return [];
+  const employees = listEmployees(days);
+  const exact = employees.filter((p) => String(p.nickname || "").trim().toLowerCase() === cleaned);
+  if (exact.length) return exact;
+  return employees.filter((p) => {
+    const nick = String(p.nickname || "").trim().toLowerCase();
+    return nick && nick.indexOf(cleaned) !== -1;
+  });
+}
+
+function formatMultipleEmployees(people) {
+  const lines = ["找到多位符合的員工："];
+  (people || []).forEach((person) => {
+    lines.push(person.nickname ? `${person.employeeId} ${person.nickname}` : person.employeeId);
+  });
+  lines.push("請輸入員工編號查詢。");
   return lines.join("\n");
 }
 
@@ -791,6 +867,10 @@ if (typeof module !== "undefined") {
     monthHours,
     formatLeaderboard,
     formatTodayBoard,
+    formatDayBoard,
+    parseDateQuery,
+    findEmployeesByNickname,
+    formatMultipleEmployees,
     shiftsInWeek,
     shiftsAfter,
     mergeRosterDays,
