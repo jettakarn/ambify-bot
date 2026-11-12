@@ -118,11 +118,6 @@ function handleText_(userId, text) {
 
   const today = taipeiToday_();
 
-  const targetDate = parseDateQuery(trimmed, today, now);
-  if (targetDate) {
-    return formatDayBoard(roster.days, targetDate, now, { todayIso: today });
-  }
-
   if (looksLikeEmployeeId(trimmed)) {
     const selected = collectSchedule(roster.days, trimmed, now);
     const upcoming = scheduleFromToday(selected, today);
@@ -168,10 +163,10 @@ function handleText_(userId, text) {
 }
 
 function menuAction_(text) {
-  if (text === "排行榜" || text === "工作時數排行榜") return "hours";
-  if (text === "丟換班" || text === "丟換班查詢") return "drop";
-  if (text === "今日班表" || text === "今天" || text === "今天班表" || text === "今天的班表") return "today";
-  if (text === "明天" || text === "明天班表" || text === "明天的班表") return "tomorrow";
+  if (text === "排行") return "hours";
+  if (text === "丟班") return "drop";
+  if (text === "今天") return "today";
+  if (text === "明天") return "tomorrow";
   return "";
 }
 
@@ -235,9 +230,9 @@ function sendDayBoard_(event, days, targetIso, now, todayIso) {
   const text = formatDayBoard(days, targetIso, now, { todayIso });
   const items = [];
   if (targetIso === todayIso) {
-    items.push(dayBoardAction_("tomorrow", "看明天班表"));
+    items.push(dayBoardAction_("tomorrow", "明天"));
   } else {
-    items.push(dayBoardAction_("today", "看今日班表"));
+    items.push(dayBoardAction_("today", "今天"));
   }
   sendMessage_(event, text, items);
 }
@@ -257,7 +252,6 @@ function dayBoardAction_(data, label) {
 function sendLeaderboard_(event, days, employeeId, today, now, page) {
   const board = formatLeaderboard(days, employeeId, today, now, page);
   const items = [];
-  if (board.page > 1) items.push(leaderboardPage_(board.page - 1, "上一頁"));
   if (board.pages > board.page) items.push(leaderboardPage_(board.page + 1, "下一頁"));
   sendMessage_(event, board.text, items);
 }
@@ -456,9 +450,11 @@ function askGemini_(config, media) {
     "你在讀國賓影城的掃描班表 PDF，可能有很多頁。",
     "每一頁抽出頁首日期，以及每一列的員工代號、暱稱、開始時間、結束時間、時數、部門。",
     "青色橫條是部門。橫條下面的列都算這個部門，直到下一條橫條。去掉「平日」和「假日」，售票部寫 TC，樓層寫 FL。",
-    "代班人員欄的 (T) 是教學，不是部門。F 是 FL。售票部會直接寫 TC，不會寫成 (T)。",
+    "代班人員欄的 (T) 是教學，不是部門。F 是 FL。售票部會直接寫 TC，不會寫成 (T)。票捷和 CB 都是 TC。",
+    "暱稱可以是中文。中文暱稱原樣寫進 nickname，不要翻成英文，也不要留空。",
     "(T) Lydia F Day1 是訓練：role 為 trainer 或 trainee，department 為 FL，day 為 1，partner 為 Lydia。不要寫進時間或員編。",
-    "點出對方名字的那列 role 寫 trainer。只有 (T) F Day1、沒有對方名字的那列 role 寫 trainee，partner 留空。",
+    "(T) 泉筱雯 CB Day1 和 (T) 泉筱雯 票捷 Day2 也是訓練，partner 為泉筱雯，department 為 TC。同一則同時寫票捷和 CB 時，department 仍是 TC。",
+    "點出對方名字的那列 role 寫 trainer，名字可以是中文。只有 (T) 和部門、Day、沒有對方名字的那列 role 寫 trainee，partner 留空。",
     "表格下方若寫著員編、暱稱、上下班和 TC 或 FL，當成該頁日期的一列。同一人同一天已有相同上下班就不要再加一列。",
     "只有樓層會細清。寫到樓層或 FL，而且有打烊或細清，才加一則 notes：department 為 FL，kind 為 closing，text 為打烊細清。括號裡的原因不要。TC 不要做細清。",
     "其他表格外的事項做成 notes：kind 為 remark，text 寫簡短事項。看得出部門就標 TC 或 FL，看不出就 department 留空。",

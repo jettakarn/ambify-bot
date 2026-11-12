@@ -31,10 +31,10 @@ One official account holds one current roster. An admin uploads the PDF. Everyon
 # Features
 
 - The admin sends a PDF. The bot says it received the file, that reading starts in about a minute, and that the whole process takes at least 3 to 5 minutes. It then says it is reading the PDF and organizing the roster, and finally sends the employee list.
-- Anyone can send an employee number, such as `12345`, and get that person's shifts from today onward, with a blank line between days. Each shift is marked `TC` or `FL` and shows only the clock times. Training under that shift reads `Peggy T Lydia FL Day 1`. When next week's roster has not been read, the reply names that Friday–Thursday range and says those days are not listed yet. It may not have been released, or the admin has not updated it, and it comes out on Tuesday at the earliest.
+- Anyone can send an employee number, such as `12345`, and get that person's shifts from today onward, with a blank line between days. Each shift is marked `TC` or `FL` and shows only the clock times. Training under that shift reads `Peggy T Lydia FL Day 1`. Ticket express (票捷) and CB both count as TC, and a nickname may be Chinese. When next week's roster has not been read, the reply names that Friday–Thursday range and says those days are not listed yet. It may not have been released, or the admin has not updated it, and it comes out on Tuesday at the earliest.
 - The same PDF bytes are skipped once the saved roster has shifts. A file that saved no rows is read again. A later upload of an earlier week stays out of lookups and drop-shift. Lookups list shifts from today onward. Drop-shift uses the week closest to today, plus the next week when that week is already read, and lists shifts after today. The hours board includes every read week in the current month, names the first and last published day, and leaves other months out.
 - Keep each file under 15MB. When the free Gemini quota runs out, the reply states the reason.
-- A rich menu in the LINE console sends `排行榜`, `丟換班`, and `今日班表`. The bot treats those three strings as the menu.
+- A rich menu in the LINE console sends `今天`, `明天`, `排行`, and `丟班`. The bot treats only those four strings as the menu.
 
 ### Hours
 
@@ -42,7 +42,7 @@ Hours use the Taipei calendar month. Each shift starts from the roster length. A
 
 The hours board lists the current Taipei month. Every read week in that month counts. The reply names the first and last published day of that month. Other months stay out. Days that were never read stay out.
 
-Your hours and rank come first, then the page, such as `第 1/3 頁`. Each page lists 10 names. Previous and next page move through the full ranking.
+Your hours and rank come first, then the page, such as `第 1/3 頁`. Each page lists 10 names and is its own message. A next-page button appears when another page remains.
 
 ### Drop shift
 
@@ -103,12 +103,13 @@ One current roster is shared. Only `ADMIN_LINE_USER_ID` can upload a PDF.
 | Add the account, roster still empty | "班表尚未更新。" |
 | An employee number, such as `12345` | That person's shifts from today onward, with a blank line between days. Each shift is marked `TC` or `FL` and shows only the clock times. Training under that shift reads `Peggy T Lydia FL Day 1`. This LINE account is stored against that number. If next week is not read yet, the reply names that week's dates |
 | `班表`, or any text that is not a number | The name list again |
-| `排行榜` | Your rank and hours for the current month, then 10 people per page, with previous and next page |
-| `丟換班` | Who can take one of your shifts after today |
-| `今日班表` | T, then TC, then FL. People on the same hours share a line. Trainers are listed as `Peggy T Lydia FL Day 1`. FL may be marked（打烊細清）. Other notes are listed under 備註. Full-time staff are included |
+| `今天` | T, then TC, then FL. People on the same hours share a line. Trainers are listed as `Peggy T Lydia FL Day 1`. FL may be marked（打烊細清）. Other notes are listed under 備註. Full-time staff are included. A button offers `明天` |
+| `明天` | Tomorrow's board, in the same layout. A button offers `今天` |
+| `排行` | Your rank and hours for the current month, then 10 people per page, with a next-page button when another page remains |
+| `丟班` | Who can take one of your shifts after today |
 | The same PDF again | The stored roster is reused |
 
-Set the bottom menu in the LINE console. The buttons send the text `排行榜`, `丟換班`, and `今日班表`.
+Set the bottom menu in the LINE console. The buttons send the text `今天`, `明天`, `排行`, and `丟班`.
 
 # Settings
 
@@ -119,7 +120,7 @@ Script properties are the configuration.
 - **Admin** is one LINE userId. Leave it empty, send the bot any message, and paste the userId from the reply.
 - **Roster folder** is a Drive folder ID. Roster JSON and upload PDFs are created there. A roster already saved elsewhere moves into this folder the next time it is opened.
 - **Webhook** is the web app `/exec` URL. Use webhook stays on. Auto-reply and the add-friend greeting stay off.
-- **Menu** is a rich menu in the LINE console. The three buttons send `排行榜`, `丟換班`, and `今日班表`.
+- **Menu** is a rich menu in the LINE console. The four buttons send `今天`, `明天`, `排行`, and `丟班`.
 
 # LLM policy
 

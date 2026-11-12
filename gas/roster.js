@@ -89,8 +89,9 @@ function formatMinutes(total) {
 function normalizeDepartment(value) {
   const text = String(value || "").replace(/\s+/g, "");
   if (!text) return "";
-  if (text === "TC" || text.indexOf("售票") !== -1) return "TC";
-  if (text === "FL" || text === "F" || text.indexOf("樓層") !== -1) return "FL";
+  const upper = text.toUpperCase();
+  if (upper === "TC" || upper === "CB" || text.indexOf("售票") !== -1 || text.indexOf("票捷") !== -1) return "TC";
+  if (upper === "FL" || upper === "F" || text.indexOf("樓層") !== -1) return "FL";
   return "";
 }
 
@@ -528,52 +529,6 @@ function formatTodayBoard(days, todayIso, now) {
   return formatDayBoard(days, todayIso, now, { todayIso });
 }
 
-function parseDateQuery(text, todayIso, now) {
-  if (!text) return null;
-  const raw = String(text).trim();
-  if (looksLikeEmployeeId(raw)) return null;
-
-  let cleaned = raw
-    .replace(/^看\s*/, "")
-    .replace(/\s*(?:的?班表|班)$/, "")
-    .trim();
-  if (!cleaned) return null;
-
-  if (cleaned === "今天" || cleaned === "今日") return todayIso;
-  if (cleaned === "明天" || cleaned === "明日") return addIsoDays(todayIso, 1);
-  if (cleaned === "後天") return addIsoDays(todayIso, 2);
-  if (cleaned === "大後天") return addIsoDays(todayIso, 3);
-  if (cleaned === "昨天" || cleaned === "昨日") return addIsoDays(todayIso, -1);
-  if (cleaned === "前天") return addIsoDays(todayIso, -2);
-
-  let match = cleaned.match(/^(\d{4})\s*[/\-.年]\s*(\d{1,2})\s*[/\-.月]\s*(\d{1,2})\s*[日號]?$/);
-  if (match) {
-    return isoDate(match[1], match[2], match[3]);
-  }
-
-  match = cleaned.match(/^(\d{1,2})\s*[/\-.]\s*(\d{1,2})$/);
-  if (match) {
-    let year = todayIso ? Number(todayIso.slice(0, 4)) : (now || new Date()).getFullYear();
-    const currentMonth = todayIso ? Number(todayIso.slice(5, 7)) : (now || new Date()).getMonth() + 1;
-    const targetMonth = Number(match[1]);
-    if (currentMonth === 12 && targetMonth === 1) year += 1;
-    else if (currentMonth === 1 && targetMonth === 12) year -= 1;
-    return isoDate(year, match[1], match[2]);
-  }
-
-  match = cleaned.match(/^(\d{1,2})\s*月\s*(\d{1,2})\s*[日號]?$/);
-  if (match) {
-    let year = todayIso ? Number(todayIso.slice(0, 4)) : (now || new Date()).getFullYear();
-    const currentMonth = todayIso ? Number(todayIso.slice(5, 7)) : (now || new Date()).getMonth() + 1;
-    const targetMonth = Number(match[1]);
-    if (currentMonth === 12 && targetMonth === 1) year += 1;
-    else if (currentMonth === 1 && targetMonth === 12) year -= 1;
-    return isoDate(year, match[1], match[2]);
-  }
-
-  return null;
-}
-
 function findEmployeesByNickname(days, query) {
   const cleaned = String(query || "").trim().toLowerCase();
   if (!cleaned) return [];
@@ -868,7 +823,6 @@ if (typeof module !== "undefined") {
     formatLeaderboard,
     formatTodayBoard,
     formatDayBoard,
-    parseDateQuery,
     findEmployeesByNickname,
     formatMultipleEmployees,
     shiftsInWeek,

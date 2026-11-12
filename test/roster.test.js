@@ -509,6 +509,9 @@ test("department labels are TC and FL", () => {
   assert.equal(roster.normalizeDepartment("櫃台"), "");
   assert.equal(roster.normalizeDepartment("F"), "FL");
   assert.equal(roster.normalizeDepartment("T"), "");
+  assert.equal(roster.normalizeDepartment("票捷"), "TC");
+  assert.equal(roster.normalizeDepartment("CB"), "TC");
+  assert.equal(roster.normalizeDepartment("cb"), "TC");
   const shift = roster.prepareShift({
     employee_id: "1326902",
     nickname: "Lydia",
@@ -518,6 +521,43 @@ test("department labels are TC and FL", () => {
     hours: "09:00",
   });
   assert.equal(shift.department, "TC");
+});
+
+test("ticket express and candy bar training stay TC and keep a Chinese name", () => {
+  const now = new Date("2026-01-01T00:00:00Z");
+  const days = [
+    {
+      date: "2026-11-16",
+      rows: [
+        {
+          employee_id: "1323303",
+          nickname: "Ching",
+          department: "TC",
+          start_time: "18:00",
+          end_time: "01:00",
+          training: { role: "trainer", partner: "泉筱雯", department: "CB", day: 1 },
+        },
+        {
+          employee_id: "1326002",
+          nickname: "泉筱雯",
+          department: "票捷",
+          start_time: "19:00",
+          end_time: "01:00",
+          training: { role: "trainee", department: "票捷", day: 1 },
+        },
+      ],
+    },
+  ];
+  const board = roster.formatTodayBoard(days, "2026-11-16", now);
+  assert.match(board, /T\n18:00–01:00  Ching T 泉筱雯 TC Day 1/);
+  assert.match(board, /TC\n19:00–01:00  泉筱雯/);
+  const trainee = roster.formatReply(roster.collectSchedule(days, "1326002", now));
+  assert.match(trainee, /1326002 泉筱雯/);
+  assert.match(trainee, /TC  19:00–01:00\nChing T 泉筱雯 TC Day 1/);
+  assert.deepEqual(
+    roster.findEmployeesByNickname(days, "泉筱雯").map((person) => person.employeeId),
+    ["1326002"],
+  );
 });
 
 test("today board lists TC then FL without employee ids", () => {
@@ -633,38 +673,6 @@ test("formatDayBoard shows department shifts for specified date and handles empt
 
   const otherEmpty = roster.formatDayBoard(days, "2026-10-17", now, { todayIso: "2026-10-15" });
   assert.equal(otherEmpty, "10/17（六）\n\n這天沒有班表。");
-});
-
-test("parseDateQuery parses relative keywords and specific dates without confusing employee IDs", () => {
-  const now = new Date("2026-01-01T00:00:00Z");
-  const today = "2026-10-15";
-
-  // Relative keywords
-  assert.equal(roster.parseDateQuery("今天", today, now), "2026-10-15");
-  assert.equal(roster.parseDateQuery("今日班表", today, now), "2026-10-15");
-  assert.equal(roster.parseDateQuery("明天", today, now), "2026-10-16");
-  assert.equal(roster.parseDateQuery("明天班表", today, now), "2026-10-16");
-  assert.equal(roster.parseDateQuery("明天的班表", today, now), "2026-10-16");
-  assert.equal(roster.parseDateQuery("看明天班", today, now), "2026-10-16");
-  assert.equal(roster.parseDateQuery("後天", today, now), "2026-10-17");
-  assert.equal(roster.parseDateQuery("昨天", today, now), "2026-10-14");
-
-  // Specific dates
-  assert.equal(roster.parseDateQuery("10/16", today, now), "2026-10-16");
-  assert.equal(roster.parseDateQuery("10-16", today, now), "2026-10-16");
-  assert.equal(roster.parseDateQuery("10月16日", today, now), "2026-10-16");
-  assert.equal(roster.parseDateQuery("10月16號班表", today, now), "2026-10-16");
-  assert.equal(roster.parseDateQuery("2026/10/16", today, now), "2026-10-16");
-  assert.equal(roster.parseDateQuery("2026-10-16班表", today, now), "2026-10-16");
-
-  // Year rollover (December -> January)
-  assert.equal(roster.parseDateQuery("1/5", "2026-12-28", now), "2027-01-05");
-
-  // Non-date strings
-  assert.equal(roster.parseDateQuery("12345", today, now), null);
-  assert.equal(roster.parseDateQuery("班表", today, now), null);
-  assert.equal(roster.parseDateQuery("Peggy", today, now), null);
-  assert.equal(roster.parseDateQuery("99/99", today, now), null);
 });
 
 test("findEmployeesByNickname matches exact and substring, excluding 3-digit full-timers", () => {
