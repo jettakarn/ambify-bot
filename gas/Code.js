@@ -376,7 +376,6 @@ function processRosterQueue() {
 function processRosterJob_(jobId) {
   const props = PropertiesService.getScriptProperties();
   const raw = props.getProperty(`job:${jobId}`);
-  props.deleteProperty(`job:${jobId}`);
   if (!raw) return;
 
   const job = JSON.parse(raw);
@@ -384,32 +383,91 @@ function processRosterJob_(jobId) {
   try {
     file = DriveApp.getFileById(job.pdfFileId);
     const bytes = file.getBlob().getBytes();
-    pushText_(job.userId, "正在讀整份 PDF。");
-    pushText_(job.userId, ingestBytes_(job.userId, bytes));
+    const pages = pdfPages_(bytes);
+    const now = queryNow_();
+    let index = job.page || 0;
+    let days = job.days || [];
+    const started = Date.now();
+    while (index < pages.length && Date.now() - started < 3.5 * 60 * 1000) {
+      keepRosterJob_(jobId, Object.assign({}, job, { page: index, days: days }));
+      pushText_(job.userId, `正在讀第 ${index + 1}/${pages.length} 頁。`);
+      const extracted = askGemini_(config_(), pages[index]);
+      if (extracted.error) {
+        const tries = (job.tries || 0) + 1;
+        if (geminiRetryable_(extracted.error) && tries < 3) {
+          keepRosterJob_(jobId, Object.assign({}, job, { page: index, days: days, tries: tries }));
+          pushText_(job.userId, "這一頁暫時讀不到，約一分鐘後再試。");
+          return;
+        }
+        dropRosterJob_(jobId);
+        pushText_(job.userId, extracted.error);
+        file.setTrashed(true);
+        return;
+      }
+      days = mergeExtractedDays_(days, extracted.days || [], now);
+      index += 1;
+      job.page = index;
+      job.days = days;
+      job.tries = 0;
+      keepRosterJob_(jobId, job);
+    }
+    if (index < pages.length) return;
+    pushText_(job.userId, "正在整理班表。");
+    const hash = sha256Hex_(bytes);
+    const document = { days: days, sourceHash: hash };
+    if (!rosterHasRows_(document)) {
+      dropRosterJob_(jobId);
+      pushText_(job.userId, "沒讀到班表。請再傳一次。");
+      file.setTrashed(true);
+      return;
+    }
+    saveRosterByHash_(hash, document);
+    setCurrentRosterHash_(hash);
+    rememberRosterHash_(hash);
+    dropRosterJob_(jobId);
+    pushText_(job.userId, formatRosterSummary(document.days, now));
+    file.setTrashed(true);
   } catch (error) {
     console.error(error);
+    const tries = (job.tries || 0) + 1;
+    if (tries < 3) {
+      keepRosterJob_(jobId, Object.assign({}, job, { tries: tries }));
+      pushText_(job.userId, "讀到一半中斷了，約一分鐘後從這一頁繼續。");
+      return;
+    }
+    dropRosterJob_(jobId);
     pushText_(job.userId, `處理失敗：${shortError_(error)}`);
+    if (file) file.setTrashed(true);
   }
-  if (file) file.setTrashed(true);
+}
+
+function pdfPages_(bytes) {
+  const images = extractJpegPages_(bytes);
+  if (images.length) return images.map((page) => ({ bytes: page, mime: "image/jpeg" }));
+  return [{ bytes: bytes, mime: "application/pdf" }];
+}
+
+function geminiRetryable_(error) {
+  return /high demand|逾時|timeout|unavailable|try again/i.test(String(error || ""));
+}
+
+function keepRosterJob_(jobId, job) {
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty(`job:${jobId}`, JSON.stringify(job));
+  const queue = JSON.parse(props.getProperty("jobQueue") || "[]");
+  if (queue.indexOf(jobId) === -1) queue.push(jobId);
+  props.setProperty("jobQueue", JSON.stringify(queue));
+}
+
+function dropRosterJob_(jobId) {
+  const props = PropertiesService.getScriptProperties();
+  props.deleteProperty(`job:${jobId}`);
+  const queue = JSON.parse(props.getProperty("jobQueue") || "[]").filter((id) => id !== jobId);
+  props.setProperty("jobQueue", JSON.stringify(queue));
 }
 
 function rosterHasRows_(document) {
   return (document.days || []).some((day) => (day.rows || []).length > 0);
-}
-
-function ingestBytes_(userId, bytes) {
-  const hash = sha256Hex_(bytes);
-  let document = loadRosterByHash_(hash);
-  if (!document || !rosterHasRows_(document)) {
-    const extracted = askGemini_(config_(), { bytes, mime: "application/pdf" });
-    if (extracted.error) return extracted.error;
-    pushText_(userId, "正在整理班表。");
-    document = { days: extracted.days || [], sourceHash: hash };
-    saveRosterByHash_(hash, document);
-  }
-  setCurrentRosterHash_(hash);
-  rememberRosterHash_(hash);
-  return formatRosterSummary(document.days, queryNow_());
 }
 
 function deleteMatchingTriggers_(handlerName) {
@@ -447,7 +505,7 @@ function downloadLineContent_(token, message) {
 
 function askGemini_(config, media) {
   const prompt = [
-    "你在讀國賓影城的掃描班表 PDF，可能有很多頁。",
+    "你在讀國賓影城的掃描班表。這次可能是一整份 PDF，或其中一頁圖片。",
     "每一頁抽出頁首日期，以及每一列的員工代號、暱稱、開始時間、結束時間、時數、部門。",
     "青色橫條是部門。橫條下面的列都算這個部門，直到下一條橫條。去掉「平日」和「假日」，售票部寫 TC，樓層寫 FL。",
     "代班人員欄的 (T) 是教學，不是部門。F 是 FL。售票部會直接寫 TC，不會寫成 (T)。票捷和 CB 都是 TC。",

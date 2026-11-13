@@ -675,6 +675,23 @@ test("formatDayBoard shows department shifts for specified date and handles empt
   assert.equal(otherEmpty, "10/17（六）\n\n這天沒有班表。");
 });
 
+test("jpeg pages are extracted and days from separate pages merge", () => {
+  const jpeg = [255, 216, 1, 2, 3, 255, 217];
+  const bytes = [0, 9].concat(jpeg, [4], jpeg.map((value) => value > 127 ? value - 256 : value));
+  const pages = roster.extractJpegPages_(bytes, 3);
+  assert.equal(pages.length, 2);
+  assert.equal(pages[0].length, jpeg.length);
+  const now = new Date("2026-01-01T00:00:00Z");
+  const days = roster.mergeExtractedDays_([
+    { date: "2026-11-13", rows: [{ employee_id: "1323303", nickname: "Ching" }], notes: [] },
+  ], [
+    { date: "2026/11/13", rows: [{ employee_id: "1326002", nickname: "泉筱雯" }], notes: [{ kind: "closing" }] },
+  ], now);
+  assert.equal(days.length, 1);
+  assert.equal(days[0].rows.length, 2);
+  assert.equal(days[0].notes.length, 1);
+});
+
 test("findEmployeesByNickname matches exact and substring, excluding 3-digit full-timers", () => {
   const days = [
     {

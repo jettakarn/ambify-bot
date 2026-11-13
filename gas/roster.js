@@ -801,6 +801,78 @@ function formatReply(result) {
   return lines.join("\n");
 }
 
+function unsignedByte_(value) {
+  const number = Number(value);
+  return number < 0 ? number + 256 : number;
+}
+
+function extractJpegPages_(bytes, minBytes) {
+  const minimum = minBytes == null ? 20 * 1024 : minBytes;
+  const pages = [];
+  let start = -1;
+  for (let i = 0; i < bytes.length - 1; i += 1) {
+    const marker = unsignedByte_(bytes[i]) === 255 && unsignedByte_(bytes[i + 1]);
+    if (!marker) continue;
+    const kind = unsignedByte_(bytes[i + 1]);
+    if (kind === 216) start = i;
+    if (kind !== 217 || start < 0) continue;
+    const end = i + 2;
+    if (end - start >= minimum) pages.push(bytes.slice(start, end));
+    start = -1;
+    i = end - 1;
+  }
+  return pages;
+}
+
+function mergeExtractedDays_(current, extra, now) {
+  const byDate = {};
+  function add(day) {
+    const date = normalizeDate(day.date, now) || String(day.date || "");
+    if (!byDate[date]) byDate[date] = { date: date, rows: [], notes: [] };
+    byDate[date].rows = byDate[date].rows.concat(day.rows || []);
+    byDate[date].notes = byDate[date].notes.concat(day.notes || []);
+  }
+  (current || []).forEach(add);
+  (extra || []).forEach(add);
+  return Object.keys(byDate).sort().map((date) => byDate[date]);
+}
+
+function unsignedByte_(value) {
+  const number = Number(value);
+  return number < 0 ? number + 256 : number;
+}
+
+function extractJpegPages_(bytes, minBytes) {
+  const minimum = minBytes == null ? 20 * 1024 : minBytes;
+  const pages = [];
+  let start = -1;
+  for (let i = 0; i < bytes.length - 1; i += 1) {
+    const marker = unsignedByte_(bytes[i]) === 255 && unsignedByte_(bytes[i + 1]);
+    if (!marker) continue;
+    const kind = unsignedByte_(bytes[i + 1]);
+    if (kind === 216) start = i;
+    if (kind !== 217 || start < 0) continue;
+    const end = i + 2;
+    if (end - start >= minimum) pages.push(bytes.slice(start, end));
+    start = -1;
+    i = end - 1;
+  }
+  return pages;
+}
+
+function mergeExtractedDays_(current, extra, now) {
+  const byDate = {};
+  function add(day) {
+    const date = normalizeDate(day.date, now) || String(day.date || "");
+    if (!byDate[date]) byDate[date] = { date: date, rows: [], notes: [] };
+    byDate[date].rows = byDate[date].rows.concat(day.rows || []);
+    byDate[date].notes = byDate[date].notes.concat(day.notes || []);
+  }
+  (current || []).forEach(add);
+  (extra || []).forEach(add);
+  return Object.keys(byDate).sort().map((date) => byDate[date]);
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     compactEmployeeId,
@@ -825,6 +897,10 @@ if (typeof module !== "undefined") {
     formatDayBoard,
     findEmployeesByNickname,
     formatMultipleEmployees,
+    extractJpegPages_,
+    mergeExtractedDays_,
+    extractJpegPages_,
+    mergeExtractedDays_,
     shiftsInWeek,
     shiftsAfter,
     mergeRosterDays,
